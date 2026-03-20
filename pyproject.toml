@@ -1,16 +1,39 @@
+[tool.setuptools]
+packages = ["swift_app", "hydroswift"]
+
+[tool.setuptools.package-data]
+swift_app = ["*.csv"]
+
 [project]
-name = "swift-wris"
-version = "0.4.0"
-description = "Simple WRIS India Fetch Tool"
+name = "hydroswift"
+version = "1.0.0"
+description = "Fast, unified workflows for hydrological data."
 authors = [{name="Carbform"}]
 requires-python = ">=3.9"
+keywords = ["hydrology", "water-resources", "data", "basin", "india"]
 
 dependencies = [
     "requests",
     "pandas",
     "tqdm",
-    "openpyxl"
+    "openpyxl",
+    "matplotlib"
 ]
 
+[project.urls]
+Homepage = "https://github.com/carbform/HydroSwift"
+Documentation = "https://hydroswift.readthedocs.io"
+
+[project.optional-dependencies]
+geo = ["geopandas", "shapely"]
+rich = ["rich"]
+all = ["geopandas", "shapely", "rich"]
+
 [project.scripts]
-swift = "swift_app.main:main"
+hyswift = "hydroswift.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:datetime.datetime.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning"
+]

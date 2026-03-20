@@ -18,64 +18,145 @@ def _collect_files(path: Path):
 def run_plot_only(args) -> int:
     """Generate plots from existing SWIFT output folders without downloading."""
 
-    from plot_station_timeseries import plot_station
+    import os
+    from pathlib import Path
+    from .cli import DATASETS, selected_datasets
+    from .plot_station_timeseries import plot_station
 
-    basin_dir = Path(args.output_dir) / args.basin.lower()
+    if not args.input_dir:
+        raise SystemExit("--plot-only requires input_dir")
 
-    if not basin_dir.exists():
-        print(f"No SWIFT output found for basin: {args.basin}")
-        return 1
+    root = Path(args.input_dir)
 
-    selected_variables = [
-        folder_name for key, (_, folder_name) in DATASETS.items()
-        if getattr(args, key)
-    ]
-
-    # ---------------------------------------------------------
-    # Plot entire basin
-    # ---------------------------------------------------------
-
-    if not selected_variables:
-
-        print("\nPlot-only mode enabled.")
-        print("Scanning basin folder:", basin_dir)
-
-        files = _collect_files(basin_dir)
-
-        if not files:
-            print("No station files found.")
-            return 1
-
-        print("Stations found:", len(files))
-
-        for file in files:
-            plot_station(file)
-
-        return 0
+    if not root.exists():
+        raise SystemExit("Input directory not found")
 
     # ---------------------------------------------------------
-    # Plot selected datasets only
+    # Dataset folder names
     # ---------------------------------------------------------
+
+    dataset_names = {folder for _, folder in DATASETS.values()}
+
+    # ---------------------------------------------------------
+    # Detect WRIS root / basin directories
+    # ---------------------------------------------------------
+
+    wris_root = root / "wris"
+    if wris_root.exists() and wris_root.is_dir():
+        wris_input_root = wris_root
+    else:
+        wris_input_root = root
+
+    if any((wris_input_root / d).is_dir() and d in dataset_names for d in os.listdir(wris_input_root)):
+        basin_dirs = [wris_input_root]
+    else:
+        basin_dirs = [d for d in wris_input_root.iterdir() if d.is_dir()]
+
+    selected = selected_datasets(args)
 
     print("\nPlot-only mode enabled.")
 
-    for variable in selected_variables:
+    total_plots = 0
 
-        variable_dir = basin_dir / variable
+    # ---------------------------------------------------------
+    # CWC plotting
+    # ---------------------------------------------------------
 
-        if not os.path.exists(variable_dir):
-            print(f"No data found for: {variable}")
-            continue
+    if args.cwc:
 
-        files = _collect_files(variable_dir)
+        # CWC layout: <root>/cwc/<optional_basin>/stations/*.csv
+        # Scan under the top-level cwc directory so that both the
+        # legacy flat layout and the new basin-aware layout work.
+        cwc_root = root / "cwc"
+
+        if not cwc_root.exists():
+            print("No CWC output found.")
+            return 1
+
+        files = _collect_files(cwc_root)
 
         if not files:
-            print(f"No station files found for: {variable}")
-            continue
+            print("No CWC station files found.")
+            return 1
 
-        print(f"Plotting {variable} ({len(files)} stations)")
+        print("\nScanning CWC stations:", len(files))
+
+        image_root = str(args.output_dir) if getattr(args, "output_dir", None) else None
 
         for file in files:
-            plot_station(file)
+            plot_station(
+                file,
+                image_root=image_root,
+                include_images_subdir=False if image_root else True,
+                export_png=not getattr(args, "plot_svg", False),
+                export_svg=getattr(args, "plot_svg", False),
+                moving_average_window=getattr(args, "plot_moving_average_window", None),
+            )
+            total_plots += 1
+
+        print("\nPlots generated:", total_plots)
+        return 0
+
+    # ---------------------------------------------------------
+    # WRIS plotting
+    # ---------------------------------------------------------
+
+    for basin_dir in basin_dirs:
+
+        basin = basin_dir.name
+
+        if not selected:
+
+            files = _collect_files(basin_dir)
+
+            if files:
+                print(f"\nScanning WRIS basin folder: {basin_dir}")
+                print("Stations found:", len(files))
+
+                image_root = str(args.output_dir) if getattr(args, "output_dir", None) else None
+
+                for file in files:
+                    plot_station(
+                        file,
+                        image_root=image_root,
+                        include_images_subdir=False if image_root else True,
+                        export_png=not getattr(args, "plot_svg", False),
+                        export_svg=getattr(args, "plot_svg", False),
+                        moving_average_window=getattr(args, "plot_moving_average_window", None),
+                    )
+                    total_plots += 1
+
+        else:
+
+            for _, folder in selected.items():
+
+                variable_dir = basin_dir / folder
+
+                if not variable_dir.exists():
+                    print(f"Dataset '{folder}' not found in basin: {basin}")
+                    continue
+
+                files = _collect_files(variable_dir)
+
+                print(f"\nPlotting {basin} / {folder} ({len(files)} stations)")
+
+                image_root = str(args.output_dir) if getattr(args, "output_dir", None) else None
+
+                for file in files:
+                    plot_station(
+                        file,
+                        image_root=image_root,
+                        include_images_subdir=False if image_root else True,
+                        export_png=not getattr(args, "plot_svg", False),
+                        export_svg=getattr(args, "plot_svg", False),
+                        moving_average_window=getattr(args, "plot_moving_average_window", None),
+                    )
+                    total_plots += 1
+
+    if total_plots == 0:
+        print("No station files found.")
+        return 1
+
+    print("\nPlots generated:", total_plots)
 
     return 0

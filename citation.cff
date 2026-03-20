@@ -1,8 +1,19 @@
 cff-version: 1.2.0
-title: "SWIFT — Simple WRIS India Fetch Tool"
-message: "If you use SWIFT in your research, please cite it."
+title: HydroSwift
+message: If you use this software, please cite it using the metadata below.
+type: software
+
 authors:
-  - name: C.Sarat
-version: 0.4.0
-date-released: 2026-03-09
-url: https://github.com/carbform/swift
+  - family-names: Sarat
+    given-names: C.
+  - family-names: Dash
+    given-names: Debashish
+  - family-names: Kumar
+    given-names: Abhinav
+
+affiliation: Water Resources Group, National Remote Sensing Centre (NRSC), ISRO, Hyderabad 500037, India
+
+version: 1.0.0
+date-released: 2026
+repository-code: https://github.com/carbform/swift
+license: MIT

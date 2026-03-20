@@ -1,5 +1,11 @@
+# Core runtime dependencies
 requests
 pandas
 tqdm
+openpyxl
+matplotlib
+
+# Full-feature extras used by merge/banner flows
 geopandas
 shapely
+rich

@@ -1,0 +1,113 @@
+site_name: HydroSwift
+site_description: Fast, unified workflows for hydrological data
+site_url: https://hydroswift.readthedocs.io/
+site_author: Carbform
+
+repo_url: https://github.com/carbform/HydroSwift
+repo_name: carbform/HydroSwift
+edit_uri: edit/main/docs/
+
+copyright: "© 2026 Carbform — MIT License"
+
+theme:
+  name: material
+
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/water
+
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.highlight
+    - search.suggest
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - header.autohide
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/carbform/HydroSwift
+      name: HydroSwift on GitHub
+
+plugins:
+  - search
+
+  - mkdocs-jupyter:
+      include_source: true
+      execute: false
+      ignore_h1_titles: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+
+  - toc:
+      permalink: true
+
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+
+  - pymdownx.details
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+docs_dir: docs
+
+nav:
+  - Home: index.md
+
+  - Getting Started:
+      - Installation: getting_started/installation.md
+
+  - Guides:
+      - Python API Guide: PYTHON_API_GUIDE.md
+      - CLI Usage Guide: CLI_USAGE_GUIDE.md
+
+  - Reference:
+      - API Functions: API_FUNCTIONS_REFERENCE.md
+      - API ↔ CLI Map: PUBLIC_API_AND_CLI.md
+
+  - Examples:
+      - Python Notebook: examples/hydroswift_python_examples.ipynb
+      - CLI Notebook: examples/hydroswift_cli_examples.ipynb

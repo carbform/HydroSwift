@@ -1,253 +1,97 @@
+# HydroSwift ⚡
 
-# SWIFT
+![Tests](https://github.com/carbform/swift/actions/workflows/tests.yml/badge.svg)
+[![Documentation](https://readthedocs.org/projects/hydroswift/badge/?version=latest)](https://hydroswift.readthedocs.io/)
 
-## Simple WRIS India Fetch Tool
+**Fast, unified workflows for hydrological data.**
 
-![Version](https://img.shields.io/badge/version-0.4.0-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Python](https://img.shields.io/badge/python-3.9%2B-blue) ![Data](https://img.shields.io/badge/data-WRIS%20India-blue) ![Field](https://img.shields.io/badge/field-hydrology-lightblue)
-
----
-
-## Overview
-
-SWIFT is a lightweight Python tool for downloading hydrological time-series data from the **India WRIS portal**:
-
-> https://indiawris.gov.in
-
-WRIS hosts a large number of hydrological datasets, but downloading them through the website GUI becomes painful if you need data for many stations or variables.
-
-Click → download → repeat… hundreds of times.
-
-SWIFT reproduces the same API calls used by the WRIS browser interface and automates the entire workflow.
-
-This tool is primarily designed for **academic hydrology workflows**.
-
----
-
-## What SWIFT does
-
-SWIFT automatically:
-
-- Discovers basin information
-- Maps tributaries and rivers
-- Finds monitoring stations
-- Retrieves station metadata
-- Downloads time-series observations
-- Generates time-series plots of the downloaded data
-
----
-
-## Supported datasets
-
-| Flag    | Dataset                |
-| ------- | ---------------------- |
-| `-q`    | River Water Discharge  |
-| `-wl`   | River Water Level      |
-| `-atm`  | Atmospheric Pressure   |
-| `-rf`   | Rainfall               |
-| `-temp` | Temperature            |
-| `-rh`   | Relative Humidity      |
-| `-solar`| Solar Radiation        |
-| `-sed`  | Suspended Sediment     |
-| `-gwl`  | Groundwater Level      |
+HydroSwift automates retrieval, processing, and visualization of hydrological observations from [India-WRIS](https://indiawris.gov.in/) and the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/). It supports discharge, water level, rainfall, temperature, humidity, solar radiation, sediment, groundwater, and atmospheric pressure datasets.
 
 ---
 
 ## Installation
 
-Clone the repository:
-
 ```bash
-git clone https://github.com/carbform/swift
+git clone https://github.com/carbform/HydroSwift.git
 cd swift
+pip install -e .          # core
+pip install -e .[all]     # with plotting + geospatial extras
 ```
 
-Install dependencies:
+Verify:
 
 ```bash
-pip install -r requirements.txt
-```
-
-SWIFT can directly be run with Python or installed as a module:
-
-
-```bash
-python swift.py -h
-```
-
-Run as a module:
-
-```bash
-python -m swift_app -h
-```
-
-Optional: install a `swift` shell command (only if you want it):
-
-```bash
-pip install -e .
-```
-
-```bash
-swift -b Krishna -h
+hyswift --version
 ```
 
 ---
 
-## Usage
+## Quick Start
 
-Download discharge data from the Krishna basin:
+### Python API
 
-```bash
-python swift.py -b Krishna -q
+```python
+import hydroswift
+
+# Discover → download → merge in one step
+stations = hydroswift.wris.stations(basin="Godavari", variable="discharge")
+hydroswift.fetch(stations, start_date="2024-01-01", end_date="2024-03-31", merge=True)
+
+# Or download directly when you already know the inputs
+hydroswift.cwc.download(station=["040-CDJAPR", "032-LGDHYD"], merge=True)
 ```
 
-You can run the equivalent module command as well:
+### CLI
 
 ```bash
-python -m swift_app -b Krishna -q
-```
-
-Download water level data:
-
-```bash
-python swift.py -b Krishna -wl
-```
-
-Download multiple datasets together:
-
-```bash
-python swift.py -b Krishna -q -wl -rf
-```
-
-Overwrite existing files (useful for testing):
-
-```bash
-python swift.py -b Krishna -q --overwrite
-```
-
-Save station metadata:
-
-```bash
-python swift.py -b Krishna -q --metadata
-```
-
-Export station geometry:
-
-```bash
-python swift.py -b Krishna -q --geopackage
-```
-
-Export station list:
-
-```bash
-python swift.py -b Krishna -q --stations
-```
-
-Merge downloaded stations into one dataset:
-
-```bash
-python swift.py -b Krishna -q --merge
-```
-
-Custom output directory:
-
-```bash
-python swift.py -b Krishna -q --output-dir data
-```
-
-Take a virtual coffee break:
-
-```bash
-python swift.py -b Krishna -q --coffee
+hyswift -b Godavari -q --merge                          # WRIS discharge
+hyswift -b Krishna -q -rf -temp                         # multiple variables
+hyswift --cwc-basin Krishna Godavari                    # CWC water level
+hyswift --plot-only --input-dir output --plot-svg       # generate plots
 ```
 
 ---
 
-## Example Output
+## Documentation
 
-Downloaded data are automatically organised by basin and dataset:
+Full docs are available at **[hydroswift.readthedocs.io](https://hydroswift.readthedocs.io/)**, including:
 
-```text
+- [Python API Guide](docs/PYTHON_API_GUIDE.md)
+- [CLI Usage Guide](docs/CLI_USAGE_GUIDE.md)
+- [API Functions Reference](docs/API_FUNCTIONS_REFERENCE.md)
+- [Example Notebooks](docs/examples/)
+
+---
+
+## Output Structure
+
+```
 output/
-    krishna/
-        discharge/
-            029-LKDHYD_Suddakal_DISCHARG.csv
+  wris/<basin>/<variable>/*.csv
+  wris/<basin>/*.gpkg
+  cwc/<basin>/stations/*.csv
+  cwc/cwc_waterlevel*.gpkg
 ```
-
-Plotting
-
-SWIFT can generate station time series plots automatically.
-
-During download:
-
-```bash
-python swift.py -b Krishna -q --plot
-```
-
-Or generate plots later using existing data:
-
-```bash
-python swift.py -b Krishna --plot-only
-```
-
-Plots are saved in:
-```text
-images/
-    krishna/
-        discharge/
-            station_plot.png
-
-output/
-    krishna/
-        discharge/
-        water_level/
-        rainfall/
-
-images/
-    krishna/
-        discharge/
-        rainfall/
-```
-
-## Notes
-
-- SWIFT mimics the API calls made by the WRIS browser interface.
-- Please avoid running it too aggressively, otherwise the server may temporarily block requests.
-- If downloads fail intermittently, simply run the script again. Completed files will be skipped unless `--overwrite` is used.
 
 ---
 
-<!-- ## Version Naming
+## Data Sources
 
-Each major SWIFT release receives a city-themed codename:
+- [India Water Resources Information System (WRIS)](https://indiawris.gov.in/)
+- [Central Water Commission (CWC) Flood Forecasting System](https://ffs.india-water.gov.in/)
 
-- Analog Amsterdam
-- Bravo Boston
-- Cryo Copenhagen
-- Delta Delhi
-- Echo Edinburgh
-- Flux Florence
-- Glacier Geneva -->
+<!-- ## Citation
 
-**Current release:**
+If you use HydroSwift in your research, please cite:
 
-`0.4.0 — Delta Delhi`
-
----
+Sarat, C., Dash, D., & Kumar, A. (2026).
+HydroSwift: Automated Retrieval of Hydrological Station Data from India-WRIS and CWC Portals.
+Journal of Open Source Software. -->
 
 ## License
 
-MIT License.
+MIT License — see [LICENSE](LICENSE) for details.
 
----
+## Acknowledgements
 
-## Acknowledgement
-
-Hydrological data are provided by the India WRIS portal.
-
-If you use the downloaded datasets in publications, please cite the WRIS data source appropriately.
-
----
-
-## Contributing
-
-Suggestions, improvements, and bug reports are welcome.
+Built with [pandas](https://pandas.pydata.org/), [geopandas](https://geopandas.org/), [matplotlib](https://matplotlib.org/), and [requests](https://docs.python-requests.org/).
