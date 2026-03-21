@@ -23,8 +23,8 @@
 
 The repository currently includes two example notebooks:
 
-- [hydroswift_python_examples.ipynb](docs/examples/hydroswift_python_examples.ipynb)
-- [hydroswift_cli_examples.ipynb](docs/examples/hydroswift_cli_examples.ipynb)
+- [hydroswift_python_examples.ipynb](examples/hydroswift_python_examples.ipynb)
+- [hydroswift_cli_examples.ipynb](examples/hydroswift_cli_examples.ipynb)
 
 The Python notebook emphasizes:
 

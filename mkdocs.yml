@@ -107,6 +107,7 @@ nav:
   - Reference:
       - API Functions: API_FUNCTIONS_REFERENCE.md
       - API ↔ CLI Map: PUBLIC_API_AND_CLI.md
+      - Future Integration: FUTURE_INTEGRATION.md
 
   - Examples:
       - Python Notebook: examples/hydroswift_python_examples.ipynb

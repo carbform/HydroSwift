@@ -27,7 +27,7 @@ The Simple Water Information Fetch Tool (`HydroSwift`) is an open-source Python 
 
 # Statement of need
 
-Researchers and hydrological practitioners often face significant hurdles when acquiring observational data from centralized repositories in India. Currently, data access relies on portals such as the National Water Informatics Centre (NWIC) [@nwic], which require manual web navigation and repetitive downloads through interactive maps or forms. Furthermore, critical historical data like groundwater levels are often published as static PDF documents by agencies like the Central Ground Water Board [@cgwb_pdf], which are extremely difficult to parse automatically for large-scale analysis. This manual approach is highly prone to error, difficult to scale to multiple basins or variables, and fundamentally hinders reproducible research. 
+Researchers, climate scientists, and hydrological practitioners often face significant hurdles when acquiring observational data from centralized repositories in India. The target audience for HydroSwift includes researchers constructing large-sample hydrological datasets, practitioners calibrating basin-scale rainfall-runoff models, and data scientists studying climate extremes. Currently, data access relies on portals such as the National Water Informatics Centre (NWIC) [@nwic], which require manual web navigation and repetitive downloads through interactive maps or forms. Furthermore, critical historical data like groundwater levels are often published as static PDF documents by agencies like the Central Ground Water Board [@cgwb_pdf], which are extremely difficult to parse automatically for large-scale analysis. This manual approach is highly prone to error, difficult to scale to multiple basins or variables, and fundamentally hinders reproducible research.
 
 While the NWIC and India-WRIS maintain Application Programming Interfaces (APIs), including Swagger UI endpoints, these backend services are primarily optimized for their own web applications. They lack structured programmatic wrappers, user-friendly documentation, and require complex workflows—such as GUI-based token generation for individual datasets, session cookie persistence, and managing undocumented payload structures. Such architectures are antithetical to the reproducible, shell-scriptable workflows necessary for bulk scientific analysis. 
 
@@ -59,8 +59,8 @@ Existing mature software tools for hydrological data retrieval largely focus on 
 # Architecture
 
 `HydroSwift` is structured into two main components:
-1. **Core Download Engine**: Handles the HTTP interactions, API session management, retries, and data parsing (`api.py`, `cwc.py`, `download.py`). It employs exponential backoff for resilience against transient network failures.
-2. **User Interface Layer**: Provides a robust Command Line Interface (`cli.py`) built with standard libraries, alongside a flexible Python API (`api_public.py`) that mirrors the CLI commands for programmatic use.
+1. **Core Download Engine**: Handles the HTTP interactions, API session management, retries, and data parsing (`api.py`, `cwc.py`, `wris.py`). It employs exponential backoff for resilience against transient network failures.
+2. **User Interface Layer**: Provides a robust Command Line Interface (`cli.py`) built with standard libraries, alongside a flexible Python API that mirrors the CLI commands for programmatic use, enabling seamless integration into Jupyter Notebook environments.
 
 The project is designed to be easily extensible. New hydrological data portals can be integrated by subclassing or extending the base API client patterns, without needing to rewrite the CLI or exporting utilities. 
 
