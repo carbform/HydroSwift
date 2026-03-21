@@ -1,6 +1,5 @@
 # Public API and CLI Map
 
-This page connects the current Python API, the CLI, and the example notebooks.
 
 ## 1. Which interface should you use?
 
@@ -20,12 +19,12 @@ This page connects the current Python API, the CLI, and the example notebooks.
 
 ---
 
-## 2. Notebook-backed usage map
+## 2. Example Notebooks
 
-The repository currently includes two example notebook pairs:
+The repository currently includes two example notebooks:
 
-- `hydroswift_python_examples.ipynb`
-- `hydroswift_cli_examples.ipynb`
+- [hydroswift_python_examples.ipynb](docs/examples/hydroswift_python_examples.ipynb)
+- [hydroswift_cli_examples.ipynb](docs/examples/hydroswift_cli_examples.ipynb)
 
 The Python notebook emphasizes:
 
@@ -73,7 +72,7 @@ The CLI notebook emphasizes:
 
 ### Python API supports table-native workflows
 
-The Python API can pass rich tables between discovery and download:
+The Python API can pass tables between station discovery and download:
 
 ```python
 stations = hydroswift.wris.stations(basin="Godavari", variable="discharge")
@@ -92,10 +91,9 @@ The CLI is best when you already know:
 
 ---
 
-## 5. Rules that apply across both interfaces
+## 5. Note :
 
 - WRIS supports multiple variables.
 - CWC is a water-level workflow.
-- Explicit namespace download methods use explicit values, not DataFrames.
 - `fetch(...)` is the bridge for HydroSwift-generated tables.
 - `merge_only(...)` and `plot_only(...)` work from existing output directories.

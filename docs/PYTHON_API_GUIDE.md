@@ -1,32 +1,29 @@
 # Python API Guide
 
-This guide documents the current Python API exposed by:
+This guide documents the HydroSwift Python API
 
 ```python
 import hydroswift
 ```
 
-It reflects the implementation in `hydroswift.api` and the workflows demonstrated in `hydroswift_python_examples.ipynb`.
-
 ## 1. Core API model
 
-HydroSwift has two complementary Python workflows.
+HydroSwift has two options for time series data downlaod.
 
-### A. Explicit download workflow
+### A. Specific download workflow
 
 Use the source-specific namespaces when you already know your inputs.
 
 - `hydroswift.wris.download(...)`
 - `hydroswift.cwc.download(...)`
 
-### B. Table-driven workflow
+### B. Using Tables
 
 Use helper methods to discover basins/stations, then pass the resulting table to:
 
 - `hydroswift.fetch(...)`
 
-This is the workflow most emphasized by the example notebook because it is reproducible and lets you inspect metadata before downloading.
-
+This is the recommended workflow.
 ---
 
 ## 2. WRIS namespace
@@ -221,13 +218,12 @@ hydroswift.cwc.download(
 )
 ```
 
-Behavior notes:
+Note:
 
 - `station` is optional.
 - `basin` is optional.
 - If both are provided, HydroSwift downloads the intersection.
 - Table-like inputs should go to `hydroswift.fetch(...)`, not `hydroswift.cwc.download(...)`.
-- Internal parameters like `_name_by` and `_gpkg_group` exist for internal dispatch; they are not normal user-facing API controls.
 
 ### `hydroswift.cwc.refresh_metadata(write=False)`
 
@@ -241,7 +237,7 @@ This is a metadata maintenance helper, not part of the common download path.
 
 ---
 
-## 4. Unified table-driven downloads with `hydroswift.fetch(...)`
+## 4. Using tables for downloads with `hydroswift.fetch(...)`
 
 `hydroswift.fetch(...)` is the main bridge between metadata discovery tables and actual downloads.
 
@@ -255,7 +251,7 @@ hydroswift.fetch(
 )
 ```
 
-### Acceptable inputs
+### Supported Table inputs
 
 Use tables returned by:
 
@@ -264,7 +260,7 @@ Use tables returned by:
 - `hydroswift.cwc.stations(...)`
 - `hydroswift.cwc.basins(...)`
 
-### WRIS behavior
+### WRIS behaviour
 
 `fetch(...)` supports both:
 
@@ -284,7 +280,7 @@ stations = hydroswift.wris.stations(basin=["Godavari", "Narmada"], variable=["so
 result = hydroswift.fetch(stations, output_dir="data_fetch_wris", start_date="2024-04-01")
 ```
 
-### CWC behavior
+### CWC behaviour
 
 `fetch(...)` supports both:
 
@@ -305,7 +301,7 @@ subset = stations_cwc[stations_cwc["name"].isin(["BODELI", "Bharuch"])]
 result = hydroswift.fetch(subset, output_dir="data_fetch_cwc", start_date="2024-04-01")
 ```
 
-### Parameters shared across fetch workflows
+### List of Parameters
 
 - `output_dir`
 - `start_date`
@@ -353,7 +349,7 @@ Notes:
 
 ### `hydroswift.plot_only(...)`
 
-Builds plots from existing HydroSwift outputs.
+Builds time series plots from existing HydroSwift outputs.
 
 Notebook-aligned examples:
 
@@ -397,17 +393,17 @@ Prints the Python API help text.
 
 Prints the CLI parser help from Python.
 
-### `hydroswift.cite()`
+<!-- ### `hydroswift.cite()`
 
-Prints the citation text.
+Prints the citation text. -->
 
 ### `hydroswift.coffee()`
 
-Prints the coffee easter egg.
+Coffee!!.
 
 ---
 
-## 7. Practical workflow recommendations
+## 7. Workflow recommendation
 
 ### Recommended workflow for notebooks
 

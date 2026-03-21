@@ -164,9 +164,9 @@ Prints Python API help text.
 
 Prints the CLI parser help text.
 
-#### `hydroswift.cite()`
+<!-- #### `hydroswift.cite()`
 
-Prints citation information.
+Prints citation information. -->
 
 #### `hydroswift.coffee()`
 

@@ -207,8 +207,6 @@ hyswift --coffee
 
 ## 8. CLI to Python equivalence
 
-The beginner notebook explicitly maps many CLI commands to Python API calls.
-
 Examples:
 
 | CLI | Python API |
@@ -235,10 +233,8 @@ These modes require:
 - `--input-dir`
 - an input directory that already contains HydroSwift outputs
 
-### Mixing WRIS expectations into CWC mode
+### Mixing WRIS into CWC mode
 
 CWC is a water-level workflow. If you need multiple WRIS variables, use WRIS mode with `-b` plus WRIS dataset flags.
 
-### Want table-driven workflows from the terminal?
-
-The CLI does not expose the same table-native dispatch model as `hydroswift.fetch(...)`. For discover → subset → fetch workflows, prefer the Python API.
+The CLI does not support the tables as inputs into `hydroswift.fetch(...)`. For discover → subset → fetch workflows, prefer the Python API.
