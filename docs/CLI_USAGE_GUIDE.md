@@ -84,7 +84,7 @@ hyswift -b Krishna --discharge --rainfall
 
 ## 4. CWC mode
 
-CWC downloads target water-level data.
+CWC downloads target water level and include discharge where available for each station/date range.
 
 You can enter CWC mode with any of the following:
 
@@ -113,7 +113,7 @@ hyswift --cwc-basin Krishna
 
 Behavior notes:
 
-- CWC mode does not support WRIS multi-variable downloads.
+- CWC mode does not use WRIS multi-variable flags; it fetches CWC fields (water level, and discharge when available).
 - If you pass both station codes and basin filters, HydroSwift uses the matching intersection.
 
 ---
@@ -235,6 +235,6 @@ These modes require:
 
 ### Mixing WRIS into CWC mode
 
-CWC is a water-level workflow. If you need multiple WRIS variables, use WRIS mode with `-b` plus WRIS dataset flags.
+CWC is a separate workflow from WRIS variable flags. If you need WRIS variables, use WRIS mode with `-b` plus WRIS dataset flags.
 
 The CLI does not support the tables as inputs into `hydroswift.fetch(...)`. For discover → subset → fetch workflows, prefer the Python API.

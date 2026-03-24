@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
 
 from .utils import Console, Logger, overwrite_tip
 from .wris import build_metadata
@@ -27,6 +28,12 @@ adapter = requests.adapters.HTTPAdapter(
 session.mount("https://", adapter)
 
 CWC_API = "https://ffs.india-water.gov.in/iam/api/new-entry-data/specification/sorted"
+LEGACY_CWC_API = "https://ffs.india-water.gov.in/web-api/getHGStationDataForFFS/"
+
+# Known CWC datatype code for water level (WSE).
+WATER_LEVEL_DATATYPE = "HHS"
+# Candidate datatype codes for discharge on CWC new-entry endpoint.
+DISCHARGE_DATATYPES = ("DISCHARG", "DISCHARGE", "Q")
 
 
 # ---------------------------------------------------------
@@ -590,7 +597,25 @@ def fetch_cwc_station_metadata():
 # Fetch CWC station data
 # ---------------------------------------------------------
 
-def fetch_station_data(code, start_date=None, end_date=None, retries=3):
+def _build_new_entry_specification(code, datatype_code, start, end):
+    """Build encoded specification payload for CWC new-entry endpoint."""
+    return (
+        "%7B%22where%22:%7B%22where%22:%7B%22where%22:%7B%22expression%22:%7B"
+        f"%22valueIsRelationField%22:false,%22fieldName%22:%22id.stationCode%22,%22operator%22:%22eq%22,%22value%22:%22{code}%22"
+        "%7D%7D,%22and%22:%7B%22expression%22:%7B"
+        f"%22valueIsRelationField%22:false,%22fieldName%22:%22id.datatypeCode%22,%22operator%22:%22eq%22,%22value%22:%22{datatype_code}%22"
+        "%7D%7D%7D,%22and%22:%7B%22expression%22:%7B"
+        "%22valueIsRelationField%22:false,%22fieldName%22:%22dataValue%22,%22operator%22:%22null%22,%22value%22:%22false%22"
+        "%7D%7D%7D,%22and%22:%7B%22expression%22:%7B"
+        f"%22valueIsRelationField%22:false,%22fieldName%22:%22id.dataTime%22,%22operator%22:%22btn%22,%22value%22:%22{start}T00:00:00,{end}T00:00:00%22"
+        "%7D%7D%7D"
+    )
+
+
+def _fetch_new_entry_timeseries(
+    code, start_date=None, end_date=None, datatype_code=WATER_LEVEL_DATATYPE, value_col="water_level", retries=3
+):
+    """Fetch one variable from CWC new-entry endpoint."""
 
     import time
 
@@ -600,17 +625,7 @@ def fetch_station_data(code, start_date=None, end_date=None, retries=3):
     params = {
         "sort-criteria": "%7B%22sortOrderDtos%22:%5B%7B%22sortDirection%22:%22ASC%22,%22field%22:%22id.dataTime%22%7D%5D%7D",
 
-        "specification": (
-            "%7B%22where%22:%7B%22where%22:%7B%22where%22:%7B%22expression%22:%7B"
-            f"%22valueIsRelationField%22:false,%22fieldName%22:%22id.stationCode%22,%22operator%22:%22eq%22,%22value%22:%22{code}%22"
-            "%7D%7D,%22and%22:%7B%22expression%22:%7B"
-            "%22valueIsRelationField%22:false,%22fieldName%22:%22id.datatypeCode%22,%22operator%22:%22eq%22,%22value%22:%22HHS%22"
-            "%7D%7D%7D,%22and%22:%7B%22expression%22:%7B"
-            "%22valueIsRelationField%22:false,%22fieldName%22:%22dataValue%22,%22operator%22:%22null%22,%22value%22:%22false%22"
-            "%7D%7D%7D,%22and%22:%7B%22expression%22:%7B"
-            f"%22valueIsRelationField%22:false,%22fieldName%22:%22id.dataTime%22,%22operator%22:%22btn%22,%22value%22:%22{start}T00:00:00,{end}T00:00:00%22"
-            "%7D%7D%7D"
-        )
+        "specification": _build_new_entry_specification(code, datatype_code, start, end)
     }
 
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -645,7 +660,7 @@ def fetch_station_data(code, start_date=None, end_date=None, retries=3):
                         pass
 
                 if rows:
-                    df = pd.DataFrame(rows, columns=["station_code", "time", "water_level"])
+                    df = pd.DataFrame(rows, columns=["station_code", "time", value_col])
                     df["time"] = pd.to_datetime(df["time"])
                     return df
 
@@ -656,6 +671,103 @@ def fetch_station_data(code, start_date=None, end_date=None, retries=3):
             time.sleep(delays[attempt])
 
     return None
+
+
+def _fetch_legacy_discharge(code, start_date=None, end_date=None, retries=3):
+    """Fetch discharge from legacy web API as fallback."""
+    import time
+
+    start = start_date or "1950-01-01"
+    end = end_date or "2100-01-01"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    delays = [5, 10, 20]
+    payload = {
+        "stationCode": f"'{code}'",
+        "startDate": start,
+        "endDate": end,
+    }
+
+    for attempt in range(retries):
+        try:
+            r = session.post(
+                LEGACY_CWC_API,
+                data=json.dumps(payload),
+                headers={**headers, "Content-Type": "application/json"},
+                timeout=120,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                rows = []
+                for j in data if isinstance(data, list) else []:
+                    try:
+                        t = j.get("actualTime") or j.get("dataTime")
+                        v = j.get("discharge")
+                        if v is None:
+                            v = j.get("q")
+                        if v is None:
+                            # Last-resort fallback for legacy payloads that expose only `value`.
+                            v = j.get("value")
+                        if t is None or v is None:
+                            continue
+                        rows.append([code, t, v])
+                    except Exception:
+                        pass
+                if rows:
+                    df = pd.DataFrame(rows, columns=["station_code", "time", "discharge"])
+                    df["time"] = pd.to_datetime(df["time"], errors="coerce")
+                    df = df.dropna(subset=["time"])
+                    if not df.empty:
+                        return df
+        except Exception:
+            pass
+
+        if attempt < retries - 1:
+            time.sleep(delays[attempt])
+
+    return None
+
+
+def fetch_station_data(code, start_date=None, end_date=None, retries=3):
+    """Fetch CWC station data (water level + discharge where available)."""
+    wl = _fetch_new_entry_timeseries(
+        code,
+        start_date=start_date,
+        end_date=end_date,
+        datatype_code=WATER_LEVEL_DATATYPE,
+        value_col="water_level",
+        retries=retries,
+    )
+
+    # Try discharge from primary endpoint using known/observed candidate datatype codes.
+    dq = None
+    for dtc in DISCHARGE_DATATYPES:
+        dq = _fetch_new_entry_timeseries(
+            code,
+            start_date=start_date,
+            end_date=end_date,
+            datatype_code=dtc,
+            value_col="discharge",
+            retries=retries,
+        )
+        if dq is not None and not dq.empty:
+            break
+
+    # Fallback to legacy endpoint only if primary discharge data is unavailable.
+    if dq is None or dq.empty:
+        dq = _fetch_legacy_discharge(code, start_date=start_date, end_date=end_date, retries=retries)
+
+    if (wl is None or wl.empty) and (dq is None or dq.empty):
+        return None
+    if wl is None or wl.empty:
+        out = dq.copy()
+    elif dq is None or dq.empty:
+        out = wl.copy()
+    else:
+        out = wl.merge(dq, on=["station_code", "time"], how="outer")
+
+    out["time"] = pd.to_datetime(out["time"], errors="coerce")
+    out = out.dropna(subset=["time"]).sort_values("time").reset_index(drop=True)
+    return out if not out.empty else None
 
 def _normalize_list_filter(value):
     """Return a list of non-empty strings from str or list/tuple/set."""
@@ -774,6 +886,10 @@ def download_station(station, output_dir, args):
     # Normalise CWC value column so downstream plot/merge logic can rely on `wse`.
     if "wse" not in df.columns and "water_level" in df.columns:
         df["wse"] = pd.to_numeric(df["water_level"], errors="coerce")
+    if "discharge" in df.columns:
+        df["discharge"] = pd.to_numeric(df["discharge"], errors="coerce")
+        # `q` keeps compatibility with WRIS-style discharge expectations.
+        df["q"] = df["discharge"]
     
     rl = station.get("rl_zero")
 
@@ -790,6 +906,8 @@ def download_station(station, output_dir, args):
     # ---------------------------------------------------------
 
     df["unit"] = "m"
+    if "discharge" in df.columns:
+        df["discharge_unit"] = "m3/s"
     df["lat"] = lat
     df["lon"] = lon
     df["station_code"] = code
@@ -800,8 +918,11 @@ def download_station(station, output_dir, args):
         "station_code",
         "time",
         "wse",
+        "discharge",
+        "q",
         "water_depth",
         "unit",
+        "discharge_unit",
         "lat",
         "lon",
     ]

@@ -71,7 +71,7 @@ Columns:
 
 #### `hydroswift.cwc.download(station=None, *, basin=None, start_date=None, end_date=None, output_dir='output', format='csv', overwrite=False, merge=False, plot=False, quiet=False, refresh=False, _name_by=None, _gpkg_group=None)`
 
-Downloads CWC water-level time series.
+Downloads CWC time series.
 
 Normal user-facing parameters are:
 
@@ -89,7 +89,7 @@ Normal user-facing parameters are:
 
 Notes:
 
-- CWC downloads are water-level only.
+- CWC downloads include water level and discharge where available for the selected station/date range.
 - If both `station` and `basin` are provided, HydroSwift downloads only matching stations.
 - `_name_by` and `_gpkg_group` are internal dispatch parameters and should not be part of normal user code.
 
@@ -135,7 +135,7 @@ Parameters:
 - `input_dir`: directory containing existing HydroSwift output
 - `output_dir`: where merged GeoPackages should be written; optional
 - `mode`: `wris` or `cwc`
-- `variable`: WRIS variable subset; ignored in CWC mode
+- `variable`: WRIS variable subset; ignored in CWC mode (CWC merge reads all available CWC fields)
 
 #### `hydroswift.plot_only(input_dir=None, output_dir=None, cwc=False, *, mode=None, variable=None, plot_svg=False, moving_average=None, window=None)`
 
@@ -147,7 +147,7 @@ Parameters:
 - `output_dir`: plot destination directory
 - `cwc`: legacy boolean flag for CWC mode
 - `mode`: preferred mode selector, `wris` or `cwc`
-- `variable`: WRIS variable subset; ignored in CWC mode
+- `variable`: WRIS variable subset; ignored in CWC mode (CWC plotting reads all available CWC fields)
 - `plot_svg`: also write SVG output
 - `moving_average`: enable moving average overlay, or pass a window value directly
 - `window`: explicit moving average window size

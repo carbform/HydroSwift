@@ -632,6 +632,62 @@ def test_fetch_dispatches_to_cwc(monkeypatch):
     assert calls["stations"] == ["040-CDJAPR"]
 
 
+def test_get_cwc_data_accepts_discharge_var_without_warning(monkeypatch, tmp_path):
+    import swift_app.api as api_mod
+    import warnings
+
+    monkeypatch.setattr(api_mod, "run_cwc_download", lambda args: None)
+
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        api_mod.get_cwc_data(
+            station=["040-CDJAPR"],
+            var=["water_level", "discharge", "q"],
+            output_dir=tmp_path,
+            merge=False,
+            quiet=True,
+        )
+
+    msgs = [str(w.message) for w in rec]
+    assert not any("Ignoring unsupported variable" in m for m in msgs)
+
+
+def test_get_cwc_data_merge_sets_discharge_units_when_present(monkeypatch, tmp_path):
+    import swift_app.api as api_mod
+
+    monkeypatch.setattr(api_mod, "run_cwc_download", lambda args: None)
+
+    cwc_root = tmp_path / "cwc"
+    cwc_root.mkdir(parents=True, exist_ok=True)
+    gpkg = cwc_root / "cwc_waterlevel_all_stations_2024-01-01_2024-01-02.gpkg"
+    gpkg.write_text("placeholder")
+
+    fake_gpd = SimpleNamespace(
+        read_file=lambda _p: pd.DataFrame(
+            {
+                "station_code": ["S1"],
+                "time": ["2024-01-01"],
+                "wse": [10.0],
+                "q": [123.0],
+            }
+        )
+    )
+    monkeypatch.setitem(sys.modules, "geopandas", fake_gpd)
+
+    out = api_mod.get_cwc_data(
+        station=["S1"],
+        start_date="2024-01-01",
+        end_date="2024-01-02",
+        output_dir=tmp_path,
+        merge=True,
+        quiet=True,
+    )
+    assert out is not None
+    assert out.attrs["units"]["water_level"] == "m"
+    assert out.attrs["units"]["q"] == "m3/s"
+    assert out.attrs["units"]["discharge"] == "m3/s"
+
+
 def test_fetch_invalid_input_type_raises():
     import swift_app.api as api_mod
 

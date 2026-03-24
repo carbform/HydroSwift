@@ -555,11 +555,11 @@ def get_cwc_data(
     gpkg_group=None,
 ):
     """
-    Download CWC water-level time-series data to files.
+    Download CWC time-series data to files.
 
-    The CWC flood-forecasting network only provides **water level**
-    data.  If ``var`` is passed with any other value a warning is
-    issued and the argument is ignored.
+    CWC downloads always include water level and, where available,
+    discharge. If ``var`` is supplied it is treated as a compatibility
+    hint (similar to WRIS naming), not a hard filter.
 
     Parameters
     ----------
@@ -570,10 +570,9 @@ def get_cwc_data(
         CWC station metadata. When provided, download is restricted to
         matching stations (similar to ``fetch()`` behavior). Files are
         saved under basin-aware folders when a single basin is requested.
-    var : ignored
-        Accepted for API symmetry with :func:`get_wris_data` but CWC
-        only provides water level.  A warning is raised if a non-water-
-        level value is supplied.
+    var : optional compatibility hint
+        Accepted values include ``water_level``/``wl`` and
+        ``discharge``/``q``. Other values are ignored with a warning.
     start_date, end_date : str, optional
         ISO date strings.
     output_dir : str
@@ -606,12 +605,12 @@ def get_cwc_data(
         pass
 
     if var is not None:
-        allowed = {"water_level", "wl"}
+        allowed = {"water_level", "wl", "discharge", "q"}
         given = {var} if isinstance(var, str) else set(var)
         bad = given - allowed
         if bad:
             warnings.warn(
-                f"CWC only provides water level data. "
+                f"CWC supports water level and discharge. "
                 f"Ignoring unsupported variable(s): {', '.join(sorted(bad))}",
                 stacklevel=2,
             )
@@ -714,8 +713,12 @@ def get_cwc_data(
         return None
     import pandas as _pd  # type: ignore[import]
     gdf_all = _pd.concat(frames, ignore_index=True)
-    # Attach simple units metadata for CWC (water level).
-    gdf_all.attrs["units"] = {"water_level": "m"}
+    # Attach simple units metadata for CWC outputs.
+    units = {"water_level": "m"}
+    if "q" in gdf_all.columns or "discharge" in gdf_all.columns:
+        units["discharge"] = "m3/s"
+        units["q"] = "m3/s"
+    gdf_all.attrs["units"] = units
     return gdf_all
 
 
@@ -1228,7 +1231,7 @@ class _CwcNamespace:
         _gpkg_group=None,
     ):
         """
-        Download CWC water-level time-series data.
+        Download CWC time-series data.
 
         Parameters
         ----------
@@ -1250,6 +1253,7 @@ class _CwcNamespace:
         - Basin filtering is supported for CWC downloads and is applied before download.
         - If both station and basin are provided, only stations present in both are downloaded.
         - If no stations match the basin filter, a ValueError is raised.
+        - Outputs always include water level and may include discharge (where available).
         - Table-like inputs (for example from ``hydroswift.cwc.stations()`` or
           ``hydroswift.cwc.basins()``) should be passed to ``hydroswift.fetch(...)``.
         """
@@ -1861,7 +1865,7 @@ def merge_only(
     )
     if mode == "cwc" and _var_list:
         warnings.warn(
-            "hydroswift.merge_only(mode='cwc', ...) ignores variable; CWC data only has water levels.",
+            "hydroswift.merge_only(mode='cwc', ...) ignores variable; CWC merges all available CWC fields (water level, discharge where available).",
             UserWarning,
             stacklevel=2,
         )
@@ -2078,7 +2082,7 @@ def plot_only(
     )
     if (mode == "cwc" or cwc) and _var_list:
         warnings.warn(
-            "hydroswift.plot_only(mode='cwc', ...) ignores variable; CWC data only has water levels.",
+            "hydroswift.plot_only(mode='cwc', ...) ignores variable; CWC plotting reads all available CWC fields.",
             UserWarning,
             stacklevel=2,
         )

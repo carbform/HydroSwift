@@ -149,7 +149,7 @@ hydroswift.wris.download(
 
 ## 3. CWC namespace
 
-CWC support is focused on **water-level** time series and metadata.
+CWC support includes **water level** and **discharge** (where available) plus station metadata.
 
 ### `hydroswift.cwc.stations(station=None, basin=None, river=None, state=None, refresh=False)`
 
@@ -223,6 +223,7 @@ Note:
 - `station` is optional.
 - `basin` is optional.
 - If both are provided, HydroSwift downloads the intersection.
+- Water level is always attempted; discharge is added where available for each station/date range.
 - Table-like inputs should go to `hydroswift.fetch(...)`, not `hydroswift.cwc.download(...)`.
 
 ### `hydroswift.cwc.refresh_metadata(write=False)`
@@ -344,7 +345,7 @@ hydroswift.merge_only(
 Notes:
 
 - `mode` may be `"wris"` or `"cwc"`.
-- `variable` applies only to WRIS; CWC ignores it.
+- `variable` applies only to WRIS; CWC merges all available CWC fields.
 - If `output_dir` is omitted, the function attempts an in-memory merge path.
 
 ### `hydroswift.plot_only(...)`

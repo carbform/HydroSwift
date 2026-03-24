@@ -13,17 +13,20 @@ download_station = cwc_mod.download_station
 
 def test_cwc_download_retry_logic(monkeypatch):
     """Test exponential backoff logic for CWC downloads."""
-    
-    # Mock sequence: failure, failure, success
+    # Isolate to the primary new-entry helper so retries stay deterministic.
+    monkeypatch.setattr(cwc_mod, "_fetch_legacy_discharge", lambda *a, **k: None)
+    monkeypatch.setattr(cwc_mod, "DISCHARGE_DATATYPES", ())
+
+    # Mock sequence: failure, failure, success for water-level endpoint.
     mock_resp_fail = MagicMock()
     mock_resp_fail.status_code = 500
-    
+
     mock_resp_succ = MagicMock()
     mock_resp_succ.status_code = 200
     mock_resp_succ.json.return_value = [
         {"stationCode": "TestStation", "id": {"dataTime": "2026-03-01"}, "dataValue": 10.5}
     ]
-    
+
     mock_get = MagicMock(side_effect=[mock_resp_fail, mock_resp_fail, mock_resp_succ])
     monkeypatch.setattr(cwc_mod.session, "get", mock_get)
 
@@ -41,8 +44,78 @@ def test_cwc_download_retry_logic(monkeypatch):
     assert mock_sleep.call_count == 2
 
 
-def test_download_station_writes_wse_column(monkeypatch, tmp_path):
-    """CWC station files should include `wse` for plotting/merge compatibility."""
+def test_fetch_station_data_includes_discharge_from_primary_endpoint(monkeypatch):
+    """fetch_station_data() should merge water level and discharge from primary API."""
+    import pandas as pd
+
+    wl = pd.DataFrame(
+        {
+            "station_code": ["040-CDJAPR"],
+            "time": [pd.Timestamp("2024-01-01 00:00:00")],
+            "water_level": [105.5],
+        }
+    )
+    dq = pd.DataFrame(
+        {
+            "station_code": ["040-CDJAPR"],
+            "time": [pd.Timestamp("2024-01-01 00:00:00")],
+            "discharge": [320.0],
+        }
+    )
+
+    def fake_new_entry(code, start_date=None, end_date=None, datatype_code=None, value_col=None, retries=3):
+        if value_col == "water_level":
+            return wl
+        if value_col == "discharge":
+            return dq
+        return None
+
+    monkeypatch.setattr(cwc_mod, "_fetch_new_entry_timeseries", fake_new_entry)
+    monkeypatch.setattr(cwc_mod, "_fetch_legacy_discharge", lambda *a, **k: None)
+    monkeypatch.setattr(cwc_mod, "DISCHARGE_DATATYPES", ("DISCHARG",))
+
+    out = cwc_mod.fetch_station_data("040-CDJAPR")
+    assert out is not None
+    assert "water_level" in out.columns
+    assert "discharge" in out.columns
+    assert out["discharge"].iloc[0] == 320.0
+
+
+def test_fetch_station_data_uses_legacy_fallback_for_discharge(monkeypatch):
+    """Legacy fallback should populate discharge when primary discharge is empty."""
+    import pandas as pd
+
+    wl = pd.DataFrame(
+        {
+            "station_code": ["040-CDJAPR"],
+            "time": [pd.Timestamp("2024-01-01 00:00:00")],
+            "water_level": [101.0],
+        }
+    )
+    dq_fallback = pd.DataFrame(
+        {
+            "station_code": ["040-CDJAPR"],
+            "time": [pd.Timestamp("2024-01-01 00:00:00")],
+            "discharge": [250.0],
+        }
+    )
+
+    def fake_new_entry(code, start_date=None, end_date=None, datatype_code=None, value_col=None, retries=3):
+        if value_col == "water_level":
+            return wl
+        return None
+
+    monkeypatch.setattr(cwc_mod, "_fetch_new_entry_timeseries", fake_new_entry)
+    monkeypatch.setattr(cwc_mod, "_fetch_legacy_discharge", lambda *a, **k: dq_fallback)
+    monkeypatch.setattr(cwc_mod, "DISCHARGE_DATATYPES", ("DISCHARG",))
+
+    out = cwc_mod.fetch_station_data("040-CDJAPR")
+    assert out is not None
+    assert out["discharge"].iloc[0] == 250.0
+
+
+def test_download_station_writes_wse_and_discharge_columns(monkeypatch, tmp_path):
+    """CWC station files should include `wse` and discharge-compatible fields."""
 
     station = {
         "code": "040-CDJAPR",
@@ -59,6 +132,7 @@ def test_download_station_writes_wse_column(monkeypatch, tmp_path):
                 "station_code": [code],
                 "time": ["2024-01-01 08:00:00"],
                 "water_level": [105.5],
+                "discharge": [300.0],
             }
         )
 
@@ -82,6 +156,9 @@ def test_download_station_writes_wse_column(monkeypatch, tmp_path):
     df = pd.read_csv(out_files[0], comment="#")
     assert "wse" in df.columns
     assert df["wse"].iloc[0] == 105.5
+    assert "discharge" in df.columns
+    assert "q" in df.columns
+    assert df["q"].iloc[0] == 300.0
 
 
 def test_run_cwc_download_applies_basin_filter_before_download(monkeypatch, tmp_path):
