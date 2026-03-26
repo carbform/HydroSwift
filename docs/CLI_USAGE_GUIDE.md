@@ -84,7 +84,7 @@ hyswift -b Krishna --discharge --rainfall
 
 ## 4. CWC mode
 
-CWC downloads target water level and include discharge where available for each station/date range.
+CWC downloads target water level. Discharge is generated from local RC curves when requested/available.
 
 You can enter CWC mode with any of the following:
 

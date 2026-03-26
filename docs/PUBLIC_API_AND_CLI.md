@@ -94,6 +94,6 @@ The CLI is best when you already know:
 ## 5. Note :
 
 - WRIS supports multiple variables.
-- CWC downloads include water level and discharge where available for the selected station/date range.
+- CWC downloads include water level; discharge is generated from local RC curves when requested/available.
 - `fetch(...)` is the bridge for HydroSwift-generated tables.
 - `merge_only(...)` and `plot_only(...)` work from existing output directories.

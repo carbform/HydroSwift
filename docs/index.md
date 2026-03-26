@@ -9,7 +9,7 @@ HydroSwift is a Python toolkit for integrating, processing, and visualizing hydr
 | Source | Variables |
 |---|---|
 | **India-WRIS** | Discharge, water level, rainfall, temperature, humidity, solar radiation, sediment, groundwater level, atmospheric pressure |
-| **CWC FFS** | Water level; discharge (where available) |
+| **CWC FFS** | Water level; RC-derived discharge (when local RC curves are available) |
 
 ## How HydroSwift is organised
 
@@ -64,7 +64,8 @@ hyswift -b Godavari -q --start-date 2024-01-01 --end-date 2024-01-10 --merge
 !!! note
     - Use `hydroswift.wris.download(...)` / `hydroswift.cwc.download(...)` for **explicit values only** (no DataFrames).
     - Use `hydroswift.fetch(table, ...)` for tables from `hydroswift.wris.stations(...)`, `hydroswift.cwc.stations(...)`, etc.
-    - CWC downloads include water level and add discharge where available for the selected station/date range.
+    - CWC downloads include water level.
+    - Discharge is generated from GUARDIAN RC coefficients in `swift_app/RC.csv` when requested/available (Patidar et al., 2024, <https://doi.org/10.1038/s41597-024-03923-8>).
 
 ## Output model
 

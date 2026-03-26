@@ -54,6 +54,17 @@ def test_cli_parser_cwc_station_and_basin_aliases():
     assert args.cwc_basin_filter == ["Krishna", "Godavari"]
 
 
+def test_cli_parser_cwc_rc_discharge_toggle():
+    from swift_app.cli import build_parser
+
+    parser = build_parser()
+    args_default = parser.parse_args(["--cwc-station", "040-CDJAPR"])
+    args_disabled = parser.parse_args(["--cwc-station", "040-CDJAPR", "--no-cwc-rc-discharge"])
+
+    assert args_default.cwc_rc_discharge is True
+    assert args_disabled.cwc_rc_discharge is False
+
+
 def test_main_dispatches_cwc_when_only_cwc_basin_is_provided(monkeypatch):
     import swift_app.main as main_mod
     import importlib

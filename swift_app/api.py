@@ -262,6 +262,8 @@ def _build_args(**kwargs):
     args.cwc_refresh = kwargs.get("cwc_refresh", False)
     args.name_by = kwargs.get("name_by")
     args.gpkg_group = kwargs.get("gpkg_group")
+    args.cwc_var = kwargs.get("cwc_var")
+    args.cwc_rc_discharge = kwargs.get("cwc_rc_discharge", True)
     args.interface = kwargs.get("interface", "python")
     dataset_keys = ["q", "wl", "atm", "rf", "temp", "rh", "solar", "sed", "gwl"]
     for key in dataset_keys:
@@ -553,13 +555,14 @@ def get_cwc_data(
     refresh=False,
     name_by=None,
     gpkg_group=None,
+    rc_discharge=True,
 ):
     """
     Download CWC time-series data to files.
 
-    CWC downloads always include water level and, where available,
-    discharge. If ``var`` is supplied it is treated as a compatibility
-    hint (similar to WRIS naming), not a hard filter.
+    CWC downloads always include water level. Discharge is generated
+    from station rating curves (RC) when requested/available locally.
+    If ``var`` is supplied it is treated as a compatibility hint.
 
     Parameters
     ----------
@@ -573,6 +576,8 @@ def get_cwc_data(
     var : optional compatibility hint
         Accepted values include ``water_level``/``wl`` and
         ``discharge``/``q``. Other values are ignored with a warning.
+        ``discharge`` uses RC-based estimation from stage, not direct
+        CWC API discharge retrieval.
     start_date, end_date : str, optional
         ISO date strings.
     output_dir : str
@@ -604,16 +609,22 @@ def get_cwc_data(
     except Exception:
         pass
 
-    if var is not None:
+    if var is None:
+        cwc_var = ["water_level"]
+    else:
+        raw_given = [var] if isinstance(var, str) else list(var)
+        given = {str(v) for v in raw_given}
         allowed = {"water_level", "wl", "discharge", "q"}
-        given = {var} if isinstance(var, str) else set(var)
         bad = given - allowed
         if bad:
             warnings.warn(
-                f"CWC supports water level and discharge. "
+                f"CWC supports water level and RC-derived discharge. "
                 f"Ignoring unsupported variable(s): {', '.join(sorted(bad))}",
                 stacklevel=2,
             )
+        cwc_var = [str(v) for v in raw_given if str(v) in allowed]
+        if not cwc_var:
+            cwc_var = ["water_level"]
 
     if format not in {"csv", "xlsx"}:
         raise ValueError("format must be one of: csv, xlsx")
@@ -657,6 +668,8 @@ def get_cwc_data(
     # Python API, not whether files are merged on disk.
     args = _build_args(
         cwc=True,
+        cwc_var=cwc_var,
+        cwc_rc_discharge=bool(rc_discharge),
         cwc_station=cwc_station,
         cwc_refresh=refresh,
         basin=basin_arg,
@@ -1217,6 +1230,8 @@ class _CwcNamespace:
     def download(
         station=None,
         *,
+        variable=None,
+        rc_discharge=True,
         basin=None,
         start_date=None,
         end_date=None,
@@ -1237,6 +1252,12 @@ class _CwcNamespace:
         ----------
         station : str or list[str], optional
             CWC station code(s). Downloads all when omitted. If both station and basin are provided, only stations in both sets are downloaded.
+        variable : str or list[str], optional
+            Compatibility hint. Accepted values include water-level
+            and discharge aliases (for example ``'water_level'``,
+            ``'wl'``, ``'discharge'``, ``'q'``). Unsupported values are ignored.
+        rc_discharge : bool, default True
+            Enable or disable RC-based discharge generation in CWC mode.
         basin : str or list[str], optional
             Basin filter(s) for station selection. Supports single or multiple basin names. If provided, only stations matching the basin(s) are downloaded (case-insensitive substring match).
         start_date, end_date : str, optional
@@ -1253,7 +1274,7 @@ class _CwcNamespace:
         - Basin filtering is supported for CWC downloads and is applied before download.
         - If both station and basin are provided, only stations present in both are downloaded.
         - If no stations match the basin filter, a ValueError is raised.
-        - Outputs always include water level and may include discharge (where available).
+        - Outputs always include water level; discharge is RC-derived when requested and RC curves are available.
         - Table-like inputs (for example from ``hydroswift.cwc.stations()`` or
           ``hydroswift.cwc.basins()``) should be passed to ``hydroswift.fetch(...)``.
         """
@@ -1265,6 +1286,8 @@ class _CwcNamespace:
 
         return get_cwc_data(
             station=station,
+            var=variable,
+            rc_discharge=rc_discharge,
             basin=basin,
             start_date=start_date,
             end_date=end_date,
@@ -1865,7 +1888,7 @@ def merge_only(
     )
     if mode == "cwc" and _var_list:
         warnings.warn(
-            "hydroswift.merge_only(mode='cwc', ...) ignores variable; CWC merges all available CWC fields (water level, discharge where available).",
+            "hydroswift.merge_only(mode='cwc', ...) ignores variable; CWC merges all available CWC fields (water level and RC-derived discharge when present).",
             UserWarning,
             stacklevel=2,
         )

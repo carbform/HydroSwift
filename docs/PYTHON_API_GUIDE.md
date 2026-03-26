@@ -149,7 +149,7 @@ hydroswift.wris.download(
 
 ## 3. CWC namespace
 
-CWC support includes **water level** and **discharge** (where available) plus station metadata.
+CWC support includes **water level** and **RC-derived discharge** (when RC curves are available) plus station metadata.
 
 ### `hydroswift.cwc.stations(station=None, basin=None, river=None, state=None, refresh=False)`
 
@@ -196,6 +196,7 @@ Use this for explicit CWC downloads.
 ```python
 gdf = hydroswift.cwc.download(
     basin=["Narmada", "Tapi"],
+    variable=["water_level", "discharge"],
     start_date="2024-01-01",
     end_date="2024-01-07",
     output_dir="output",
@@ -223,8 +224,13 @@ Note:
 - `station` is optional.
 - `basin` is optional.
 - If both are provided, HydroSwift downloads the intersection.
-- Water level is always attempted; discharge is added where available for each station/date range.
+- Water level is always attempted.
+- `variable='discharge'` (or `'q'`) uses stage-to-discharge estimation from GUARDIAN RC coefficients in `swift_app/RC.csv`.
 - Table-like inputs should go to `hydroswift.fetch(...)`, not `hydroswift.cwc.download(...)`.
+
+Citation for RC-based fallback:
+
+- Patidar, G., Indu, J., & Karmakar, S. (2024). *ExtendinG SUb-DAily River Discharge data over INdia (GUARDIAN).* Scientific Data, 11, 1155. <https://doi.org/10.1038/s41597-024-03923-8>
 
 ### `hydroswift.cwc.refresh_metadata(write=False)`
 

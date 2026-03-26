@@ -69,13 +69,14 @@ Columns:
 - `basin`
 - `station_count`
 
-#### `hydroswift.cwc.download(station=None, *, basin=None, start_date=None, end_date=None, output_dir='output', format='csv', overwrite=False, merge=False, plot=False, quiet=False, refresh=False, _name_by=None, _gpkg_group=None)`
+#### `hydroswift.cwc.download(station=None, *, variable=None, basin=None, start_date=None, end_date=None, output_dir='output', format='csv', overwrite=False, merge=False, plot=False, quiet=False, refresh=False, _name_by=None, _gpkg_group=None)`
 
 Downloads CWC time series.
 
 Normal user-facing parameters are:
 
 - `station`
+- `variable` (`water_level`/`wl` and `discharge`/`q`)
 - `basin`
 - `start_date`
 - `end_date`
@@ -89,7 +90,7 @@ Normal user-facing parameters are:
 
 Notes:
 
-- CWC downloads include water level and discharge where available for the selected station/date range.
+- CWC downloads include water level; discharge is RC-derived when requested and RC curves are available locally (`swift_app/RC.csv`).
 - If both `station` and `basin` are provided, HydroSwift downloads only matching stations.
 - `_name_by` and `_gpkg_group` are internal dispatch parameters and should not be part of normal user code.
 

@@ -384,6 +384,42 @@ def test_cwc_namespace_download_dispatches(monkeypatch):
     assert calls["cwc"] is True
     assert calls["stations"] == ["040-CDJAPR"]
 
+
+def test_cwc_namespace_download_accepts_variable_kwarg(monkeypatch):
+    """swift.cwc.download(..., variable=...) should pass through to get_cwc_data."""
+    import swift_app.api as api_mod
+
+    calls = {}
+
+    def fake_get_cwc_data(**kwargs):
+        calls["var"] = kwargs.get("var")
+        calls["station"] = kwargs.get("station")
+        return None
+
+    monkeypatch.setattr(api_mod, "get_cwc_data", fake_get_cwc_data)
+
+    api_mod.cwc_ns.download(
+        station=["040-CDJAPR"],
+        variable="discharge",
+        quiet=True,
+    )
+    assert calls["station"] == ["040-CDJAPR"]
+    assert calls["var"] == "discharge"
+
+
+def test_cwc_namespace_download_accepts_rc_discharge_toggle(monkeypatch):
+    import swift_app.api as api_mod
+
+    calls = {}
+
+    def fake_get_cwc_data(**kwargs):
+        calls["rc_discharge"] = kwargs.get("rc_discharge")
+        return None
+
+    monkeypatch.setattr(api_mod, "get_cwc_data", fake_get_cwc_data)
+    api_mod.cwc_ns.download(station=["040-CDJAPR"], rc_discharge=False, quiet=True)
+    assert calls["rc_discharge"] is False
+
 def test_cwc_namespace_download_basin_filter(monkeypatch):
     import swift_app.api as api_mod
     calls = {}

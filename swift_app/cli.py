@@ -124,6 +124,19 @@ def build_parser() -> argparse.ArgumentParser:
     download.add_argument("--delay", type=float, default=0.25, help="Delay between WRIS API requests (seconds)")
     download.add_argument("--start-date", default="1950-01-01", help="Start date (YYYY-MM-DD)")
     download.add_argument("--end-date", default=time.strftime("%Y-%m-%d"), help="End date (YYYY-MM-DD)")
+    download.add_argument(
+        "--cwc-rc-discharge",
+        dest="cwc_rc_discharge",
+        action="store_true",
+        default=True,
+        help="Enable RC-based discharge generation in CWC mode (default: enabled).",
+    )
+    download.add_argument(
+        "--no-cwc-rc-discharge",
+        dest="cwc_rc_discharge",
+        action="store_false",
+        help="Disable RC-based discharge generation in CWC mode.",
+    )
 
     output = parser.add_argument_group("Output options")
     output.add_argument("--metadata", action="store_true", help="Save station metadata as CSV")

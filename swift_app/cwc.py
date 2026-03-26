@@ -44,8 +44,10 @@ CACHE_DIR = Path.home() / ".swift_cache"
 CACHE_FILE = CACHE_DIR / "cwc_meta.csv"
 PACKAGED_CSV = Path(__file__).parent / "cwc_meta.csv"
 NAME_CODE_CSV = Path(__file__).parent / "name-code.csv"
+RC_CSV = Path(__file__).parent / "RC.csv"
 
 CACHE_TTL = 86400  # 24 hours
+MONSOON_MONTHS = {6, 7, 8, 9}
 
 
 def _read_csv_safe(path):
@@ -67,6 +69,114 @@ def _write_cache(df):
         df.to_csv(CACHE_FILE, index=False)
     except Exception:
         pass
+
+
+def _norm_station_name(name):
+    """Normalize station names for robust cross-file joins."""
+    if name is None:
+        return ""
+    s = str(name).strip().lower()
+    return "".join(ch for ch in s if ch.isalnum())
+
+
+def _load_rc_lookup():
+    """Load RC curves and map by station code where possible."""
+    if not RC_CSV.exists():
+        return {}
+    try:
+        rc = pd.read_csv(RC_CSV)
+    except Exception:
+        return {}
+    rc.columns = [str(c).strip() for c in rc.columns]
+
+    required = {"name", "algo_m", "algo_nm"}
+    if not required.issubset(set(rc.columns)):
+        return {}
+
+    name_to_row = {}
+    for _, row in rc.iterrows():
+        k = _norm_station_name(row.get("name"))
+        if k and k not in name_to_row:
+            name_to_row[k] = row.to_dict()
+
+    if not NAME_CODE_CSV.exists():
+        return {}
+    try:
+        nc = pd.read_csv(NAME_CODE_CSV)
+        nc.columns = [str(c).strip().lower() for c in nc.columns]
+    except Exception:
+        return {}
+    if not {"code", "name"}.issubset(set(nc.columns)):
+        return {}
+
+    code_to_rc = {}
+    for _, row in nc.iterrows():
+        code = str(row.get("code", "")).strip()
+        name_key = _norm_station_name(row.get("name"))
+        if code and name_key in name_to_row:
+            code_to_rc[code.lower()] = name_to_row[name_key]
+    return code_to_rc
+
+
+_RC_LOOKUP = None
+
+
+def _get_rc_row(station_code, station_name=None):
+    """Get one RC row dict for a station, by code then fallback name."""
+    global _RC_LOOKUP
+    if _RC_LOOKUP is None:
+        _RC_LOOKUP = _load_rc_lookup()
+    code_key = str(station_code).strip().lower()
+    row = _RC_LOOKUP.get(code_key)
+    if row:
+        return row
+    # Name fallback when code linkage is unavailable.
+    if station_name:
+        nk = _norm_station_name(station_name)
+        for v in _RC_LOOKUP.values():
+            if _norm_station_name(v.get("name")) == nk:
+                return v
+    return None
+
+
+def _rc_discharge_value(wse, ts, rc_row):
+    """Estimate discharge from RC coefficients for one timestamp."""
+    if pd.isna(wse) or rc_row is None or pd.isna(ts):
+        return None, None
+    is_monsoon = pd.Timestamp(ts).month in MONSOON_MONTHS
+    prefix = "m" if is_monsoon else "nm"
+    algo = rc_row.get(f"algo_{prefix}")
+    if pd.isna(algo):
+        return None, None
+
+    try:
+        wl = float(wse)
+    except Exception:
+        return None, None
+
+    try:
+        algo = int(algo)
+    except Exception:
+        return None, None
+
+    if algo == 1:
+        p1 = rc_row.get(f"{prefix}_poly_p1")
+        p2 = rc_row.get(f"{prefix}_poly_p2")
+        p3 = rc_row.get(f"{prefix}_poly_p3")
+        if any(pd.isna(x) for x in [p1, p2, p3]):
+            return None, None
+        q = float(p1) * (wl ** 2) + float(p2) * wl + float(p3)
+        return (q if q >= 0 else None), "poly2"
+
+    if algo == 2:
+        p1 = rc_row.get(f"{prefix}_n3_p1")
+        p2 = rc_row.get(f"{prefix}_n3_p2")
+        if any(pd.isna(x) for x in [p1, p2]):
+            return None, None
+        q = float(p1) * (wl ** 3) + float(p2)
+        return (q if q >= 0 else None), "cubic"
+
+    return None, None
 
 
 def _fetch_station_detail(code, retries=3):
@@ -727,43 +837,33 @@ def _fetch_legacy_discharge(code, start_date=None, end_date=None, retries=3):
     return None
 
 
-def fetch_station_data(code, start_date=None, end_date=None, retries=3):
-    """Fetch CWC station data (water level + discharge where available)."""
-    wl = _fetch_new_entry_timeseries(
-        code,
-        start_date=start_date,
-        end_date=end_date,
-        datatype_code=WATER_LEVEL_DATATYPE,
-        value_col="water_level",
-        retries=retries,
-    )
+def fetch_station_data(code, start_date=None, end_date=None, retries=3, variables=None):
+    """Fetch CWC station data for requested variables."""
+    vars_req = set(variables or ["water_level"])
+    want_wl = "water_level" in vars_req or "wl" in vars_req
+    want_q = "discharge" in vars_req or "q" in vars_req
+    # RC fallback estimates discharge from water level; keep stage fetch enabled.
+    if want_q:
+        want_wl = True
 
-    # Try discharge from primary endpoint using known/observed candidate datatype codes.
-    dq = None
-    for dtc in DISCHARGE_DATATYPES:
-        dq = _fetch_new_entry_timeseries(
+    wl = None
+    if want_wl:
+        wl = _fetch_new_entry_timeseries(
             code,
             start_date=start_date,
             end_date=end_date,
-            datatype_code=dtc,
-            value_col="discharge",
+            datatype_code=WATER_LEVEL_DATATYPE,
+            value_col="water_level",
             retries=retries,
         )
-        if dq is not None and not dq.empty:
-            break
 
-    # Fallback to legacy endpoint only if primary discharge data is unavailable.
-    if dq is None or dq.empty:
-        dq = _fetch_legacy_discharge(code, start_date=start_date, end_date=end_date, retries=retries)
+    # CWC API discharge is not used in HydroSwift; discharge is generated
+    # from RC curves in download_station() when requested.
+    dq = None
 
-    if (wl is None or wl.empty) and (dq is None or dq.empty):
+    if (wl is None or wl.empty):
         return None
-    if wl is None or wl.empty:
-        out = dq.copy()
-    elif dq is None or dq.empty:
-        out = wl.copy()
-    else:
-        out = wl.merge(dq, on=["station_code", "time"], how="outer")
+    out = wl.copy()
 
     out["time"] = pd.to_datetime(out["time"], errors="coerce")
     out = out.dropna(subset=["time"]).sort_values("time").reset_index(drop=True)
@@ -867,6 +967,7 @@ def download_station(station, output_dir, args):
         code,
         start_date=args.start_date,
         end_date=args.end_date,
+        variables=getattr(args, "cwc_var", None),
     )
 
     if df is None or df.empty:
@@ -890,6 +991,27 @@ def download_station(station, output_dir, args):
         df["discharge"] = pd.to_numeric(df["discharge"], errors="coerce")
         # `q` keeps compatibility with WRIS-style discharge expectations.
         df["q"] = df["discharge"]
+
+    # RC-based fallback from GUARDIAN (Patidar et al., 2024):
+    # when API discharge is unavailable, estimate Q from stage (wse).
+    need_rc = "wse" in df.columns and (
+        "discharge" not in df.columns or df["discharge"].isna().all()
+    )
+    rc_enabled = bool(getattr(args, "cwc_rc_discharge", True))
+    need_rc = need_rc and rc_enabled
+    if need_rc:
+        rc_row = _get_rc_row(code, name)
+        if rc_row is not None:
+            vals, methods = [], []
+            for _, rr in df.iterrows():
+                qv, m = _rc_discharge_value(rr.get("wse"), rr.get("time"), rc_row)
+                vals.append(qv)
+                methods.append(m)
+            if any(v is not None for v in vals):
+                df["discharge"] = pd.to_numeric(pd.Series(vals, index=df.index), errors="coerce")
+                df["q"] = df["discharge"]
+                df["discharge_source"] = "rc_guardian_2024"
+                df["discharge_method"] = methods
     
     rl = station.get("rl_zero")
 
@@ -923,6 +1045,8 @@ def download_station(station, output_dir, args):
         "water_depth",
         "unit",
         "discharge_unit",
+        "discharge_source",
+        "discharge_method",
         "lat",
         "lon",
     ]
@@ -1001,8 +1125,10 @@ def run_cwc_download(args):
     Console.is_quiet = getattr(args, "quiet", False)
     logger = Logger(cwc_root)
     
-    Console.section("Dataset: water_level (CWC)")
-    logger.log("INFO", "Starting CWC water_level download")
+    vars_req = getattr(args, "cwc_var", None) or ["water_level"]
+    dataset_label = ",".join(vars_req)
+    Console.section(f"Dataset: {dataset_label} (CWC)")
+    logger.log("INFO", f"Starting CWC {dataset_label} download")
 
     dataset_start = _time.time()
 
@@ -1169,7 +1295,7 @@ def run_cwc_download(args):
         for f in tqdm_mod(
             as_completed(futures),
             total=len(futures),
-            desc="water_level",
+            desc=dataset_label,
             unit="station",
             leave=True,
             dynamic_ncols=True,
@@ -1288,7 +1414,7 @@ def run_cwc_download(args):
     if downloaded > 0:
         if not Console.is_quiet:
             print()
-        Console.success(f"water_level downloaded in {runtime} seconds")
+        Console.success(f"{dataset_label} downloaded in {runtime} seconds")
 
     attempted = remaining
     selected = n_stations
@@ -1318,7 +1444,7 @@ def run_cwc_download(args):
         )
         print("-------------------------------------------------------------")
         print(
-            f"{'water_level':<18}"
+            f"{dataset_label:<18}"
             f"{selected:<10}"
             f"{attempted:<11}"
             f"{downloaded:<12}"
