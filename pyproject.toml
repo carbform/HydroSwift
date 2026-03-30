@@ -27,10 +27,12 @@ Documentation = "https://hydroswift.readthedocs.io"
 [project.optional-dependencies]
 geo = ["geopandas", "shapely"]
 rich = ["rich"]
-all = ["geopandas", "shapely", "rich"]
+gui = ["PyQt5>=5.15.0", "PyQt5-stubs"]
+all = ["geopandas", "shapely", "rich", "PyQt5>=5.15.0", "PyQt5-stubs"]
 
 [project.scripts]
 hyswift = "hydroswift.main:main"
+hyswift-gui = "swift_app.gui.app:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
