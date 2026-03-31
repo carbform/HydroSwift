@@ -1323,7 +1323,7 @@ def run_cwc_download(args):
 
     if args.plot:
         try:
-            from .plot_station_timeseries import plot_station
+            from .plot_station_timeseries import plot_station, plot_rating_curve
 
             outdirs = set(item[2] for item in station_list)
             
@@ -1337,14 +1337,23 @@ def run_cwc_download(args):
             else:
                 image_root = str(args.output_dir) if getattr(args, "output_dir", None) else None
 
+                rc_count = 0
                 for f in tqdm_mod(files, desc="Plotting", unit="plot", dynamic_ncols=True, disable=Console.is_quiet):
                     try:
                         plot_station(f, image_root=image_root)
                     except Exception as pe:
                         logger.log("WARN", f"Plot failed for {f.name}: {str(pe)}")
+                    # Generate rating curve H-Q plot when discharge data exists.
+                    try:
+                        plot_rating_curve(f, image_root=image_root)
+                        rc_count += 1
+                    except Exception:
+                        pass
                         
                 Console.success(f"Plots generated: {len(files)}")
-                logger.log("INFO", f"Successfully generated {len(files)} plots")
+                if rc_count > 0:
+                    Console.success(f"Rating curve plots generated: {rc_count}")
+                logger.log("INFO", f"Successfully generated {len(files)} plots ({rc_count} with RC)")
 
         except Exception as e:
             Console.warn(f"Plotting failed: {str(e)}")

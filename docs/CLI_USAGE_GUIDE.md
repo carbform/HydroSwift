@@ -47,6 +47,7 @@ You can pass either:
 
 - a basin name, such as `Krishna`
 - a WRIS basin number, such as `6`
+- the keyword `all` to download all 17 WRIS basins
 
 Examples:
 
@@ -54,6 +55,7 @@ Examples:
 hyswift -b 5 -q
 hyswift -b Krishna -q -rf -temp
 hyswift -b Godavari --discharge --rainfall --temperature
+hyswift -b all -wl
 ```
 
 ---
@@ -100,8 +102,9 @@ hyswift --cwc-basin Krishna Godavari
 - `--cwc`
 - `--cwc-station CODE [CODE ...]`
 - `--station CODE [CODE ...]` (alias of `--cwc-station`)
-- `--cwc-basin NAME [NAME ...]`
+- `--cwc-basin NAME [NAME ...]` (use `all` for all CWC stations)
 - `--cwc-refresh`
+- `--no-cwc-rc-discharge` (disables RC-based discharge in CWC mode)
 
 Examples aligned with the notebook:
 
@@ -113,7 +116,8 @@ hyswift --cwc-basin Krishna
 
 Behavior notes:
 
-- CWC mode does not use WRIS multi-variable flags; it fetches CWC fields (water level, and discharge when available).
+- CWC mode fetches water level and generates RC-based discharge estimates implicitly.
+- Use `--no-cwc-rc-discharge` to disable discharge estimation.
 - If you pass both station codes and basin filters, HydroSwift uses the matching intersection.
 
 ---

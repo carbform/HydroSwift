@@ -174,12 +174,16 @@ def _normalize_cwc_basin_input(basin):
     """Normalise CWC basin filters from scalar/list/table-like inputs.
 
     Accepts:
-    - str / scalar basin names
+    - str / scalar basin names (including ``'all'`` for all basins)
     - list/tuple/set of basin names
     - pandas Series of basin names
     - pandas DataFrame (or SwiftTable) containing a ``basin`` column
     """
     if basin is None:
+        return []
+
+    # 'all' keyword — return empty list so no filter is applied (= all basins).
+    if isinstance(basin, str) and basin.strip().lower() == "all":
         return []
 
     # Table-like input (e.g., hydroswift.cwc.basins()[0:3]).
@@ -273,6 +277,13 @@ def _build_args(**kwargs):
     return args
 
 
+def _expand_basin_all(basin):
+    """If *basin* is the ``'all'`` keyword, return the full WRIS basin name list."""
+    if isinstance(basin, str) and basin.strip().lower() == "all":
+        return list(WRIS_BASINS.values())
+    return None
+
+
 def _resolve_basin(basin):
     """Normalise basin input (int / number-string / name) to a basin name."""
     if isinstance(basin, (list, tuple, set)):
@@ -343,6 +354,11 @@ def get_wris_data(
     >>> hydroswift.wris.download(basin=6, variable=['discharge', 'rainfall'],
     ...                     start_date='2020-01-01', merge=True)
     """
+    # Expand basin='all' to the full WRIS basin list.
+    all_basins = _expand_basin_all(basin)
+    if all_basins is not None:
+        basin = all_basins
+
     if isinstance(basin, (list, tuple, set)):
         basins = list(basin)
         if not basins:
@@ -843,6 +859,11 @@ def wris_stations(basin, var, delay=0.25):
     if not var_list:
         raise ValueError("var must be provided (for example: 'discharge' or 'solar').")
 
+    # Expand basin='all' to the full WRIS basin list.
+    all_basins = _expand_basin_all(basin)
+    if all_basins is not None:
+        basin = all_basins
+
     if isinstance(basin, (list, tuple, set)):
         basin_list = list(basin)
     else:
@@ -1058,6 +1079,11 @@ class _WrisNamespace:
                 "For WRIS station/basin tables, use swift.fetch(table, ...)."
             )
 
+        # Expand basin='all' to the full WRIS basin list.
+        all_basins = _expand_basin_all(basin)
+        if all_basins is not None:
+            basin = all_basins
+
         if basin is None:
             raise ValueError(
                 "basin is required for swift.wris.download()."
@@ -1123,6 +1149,10 @@ class _WrisNamespace:
                 "variable is required for hydroswift.wris.stations() "
                 "(for example: 'discharge' or 'solar')."
             )
+        # Expand basin='all' to the full WRIS basin list.
+        all_basins = _expand_basin_all(basin)
+        if all_basins is not None:
+            basin = all_basins
         return wris_stations(basin=basin, var=variable, delay=delay)
 
     @staticmethod
@@ -1284,6 +1314,10 @@ class _CwcNamespace:
                 "For CWC station/basin tables, use swift.fetch(table, ...)."
             )
 
+        # basin='all' → no basin filter (downloads all CWC stations).
+        if isinstance(basin, str) and basin.strip().lower() == "all":
+            basin = None
+
         return get_cwc_data(
             station=station,
             var=variable,
@@ -1310,6 +1344,9 @@ class _CwcNamespace:
         -------
         SwiftTable
         """
+        # basin='all' → no basin filter (returns all CWC stations).
+        if isinstance(basin, str) and basin.strip().lower() == "all":
+            basin = None
         return cwc_stations(
             station=station,
             basin=basin,

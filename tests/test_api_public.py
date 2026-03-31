@@ -1253,3 +1253,74 @@ def test_package_help_prints_python_api_menu(capsys):
     assert "swift.fetch(table, ...)" in out
     assert "swift.cli_help()" in out
 
+
+def test_wris_download_basin_all_expands_to_all_basins(monkeypatch):
+    import swift_app.api as api_mod
+    
+    # Mock get_wris_data to just capture the arguments
+    captured = {}
+    def fake_get_wris_data(**kwargs):
+        captured.update(kwargs)
+        return None
+        
+    monkeypatch.setattr(api_mod, "get_wris_data", fake_get_wris_data)
+    
+    api_mod.wris.download(basin="all", variable="discharge")
+    
+    # WRIS_BASINS has 17 items, basin='all' should be converted to a list of those 17
+    assert isinstance(captured.get("basin"), list)
+    assert len(captured.get("basin")) == 17
+    from swift_app.cli import WRIS_BASINS
+    for val in WRIS_BASINS.values():
+        assert val in captured.get("basin")
+
+
+def test_wris_stations_basin_all_queries_all_basins(monkeypatch):
+    import swift_app.api as api_mod
+    
+    captured = {}
+    def fake_wris_stations(**kwargs):
+        captured.update(kwargs)
+        # Mock minimal valid return
+        import pandas as pd
+        return pd.DataFrame()
+        
+    monkeypatch.setattr(api_mod, "wris_stations", fake_wris_stations)
+    
+    api_mod.wris.stations(basin="all", variable="discharge")
+    
+    assert isinstance(captured.get("basin"), list)
+    assert len(captured.get("basin")) == 17
+
+
+def test_cwc_download_basin_all_downloads_all_stations(monkeypatch):
+    import swift_app.api as api_mod
+    
+    captured = {}
+    def fake_get_cwc_data(**kwargs):
+        captured.update(kwargs)
+        return None
+        
+    monkeypatch.setattr(api_mod, "get_cwc_data", fake_get_cwc_data)
+    
+    api_mod.cwc_ns.download(basin="all")
+    
+    # basin='all' passes None down to the CWC implementation
+    assert captured.get("basin") is None
+
+
+def test_cwc_stations_basin_all_returns_all(monkeypatch):
+    import swift_app.api as api_mod
+    
+    captured = {}
+    def fake_cwc_stations(**kwargs):
+        captured.update(kwargs)
+        import pandas as pd
+        return pd.DataFrame()
+        
+    monkeypatch.setattr(api_mod, "cwc_stations", fake_cwc_stations)
+    
+    api_mod.cwc_ns.stations(basin="all")
+    
+    # basin='all' passes None
+    assert captured.get("basin") is None

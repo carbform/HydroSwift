@@ -55,10 +55,12 @@ The CLI notebook emphasizes:
 |---|---|---|
 | Download WRIS discharge for a basin | `hydroswift.wris.download(basin='Godavari', variable='discharge')` | `hyswift -b Godavari -q` |
 | Download multiple WRIS variables | `hydroswift.wris.download(basin='Krishna', variable=['discharge', 'rainfall', 'temperature'])` | `hyswift -b Krishna -q -rf -temp` |
+| Download from all WRIS basins | `hydroswift.wris.download(basin='all', variable='discharge')` | `hyswift -b all -q` |
 | Discover WRIS stations before downloading | `hydroswift.wris.stations(basin='Godavari', variable='discharge')` | not directly exposed as a table workflow |
 | Download from a WRIS station table | `hydroswift.fetch(wris_table, ...)` | not directly exposed |
-| Download all CWC stations in a basin | `hydroswift.cwc.download(basin=['Krishna'])` | `hyswift --cwc-basin Krishna` |
+| Download all CWC stations in a basin | `hydroswift.cwc.download(basin=['Krishna'], variable=['water_level', 'discharge'])` | `hyswift --cwc-basin Krishna` |
 | Download selected CWC stations | `hydroswift.cwc.download(station=['032-LGDHYD'])` | `hyswift --cwc-station 032-LGDHYD` |
+| Download all CWC stations | `hydroswift.cwc.download(basin='all')` | `hyswift --cwc-basin all` |
 | Discover CWC station metadata | `hydroswift.cwc.stations(...)` | `hyswift --list` gives only a summary, not the full table |
 | Merge existing output | `hydroswift.merge_only(input_dir='output')` | `hyswift --merge-only --input-dir output` |
 | Plot existing output | `hydroswift.plot_only(input_dir='output')` | `hyswift --plot-only --input-dir output` |

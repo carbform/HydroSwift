@@ -129,11 +129,20 @@ gdf = hydroswift.wris.download(
 
 Key points:
 
-- `basin` is required.
+- `basin` is required. Use `basin="all"` to download from all 17 WRIS basins.
 - `variable` is required.
 - `station` and `stations` are aliases; provide only one of them.
 - Inputs must be explicit strings/ints/lists, **not DataFrames**.
 - Basin values may be names like `"Krishna"` or WRIS numeric basin IDs such as `6`.
+
+Example with `basin="all"`:
+
+```python
+hydroswift.wris.download(
+    basin="all",
+    variable="discharge",
+)
+```
 
 Example with station filtering:
 
@@ -222,10 +231,11 @@ hydroswift.cwc.download(
 Note:
 
 - `station` is optional.
-- `basin` is optional.
+- `basin` is optional. Use `basin="all"` to explicitly request all available basins (the default behavior if omitted).
 - If both are provided, HydroSwift downloads the intersection.
 - Water level is always attempted.
 - `variable='discharge'` (or `'q'`) uses stage-to-discharge estimation from GUARDIAN RC coefficients in `swift_app/RC.csv`.
+- `rc_discharge` controls whether to estimate discharge (default is `True`).
 - Table-like inputs should go to `hydroswift.fetch(...)`, not `hydroswift.cwc.download(...)`.
 
 Citation for RC-based fallback:

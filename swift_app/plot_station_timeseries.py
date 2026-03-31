@@ -199,6 +199,125 @@ def plot_station(
     except Exception as e:
         print("Failed:", file_path.name, "|", str(e))
 
+def plot_rating_curve(
+    file_path,
+    image_root=None,
+    include_images_subdir=True,
+    export_png=None,
+    export_svg=False,
+):
+    """Plot a rating curve (H vs Q) from a CWC station file.
+
+    If the file contains both ``wse`` and ``discharge`` columns, this
+    produces an H-Q line plot with the RC parameters annotated in a
+    stat box.  Files without discharge data are silently skipped.
+    """
+    file_path = Path(file_path)
+    try:
+        if export_png is None:
+            export_png = not export_svg
+
+        df = load_swift_file(file_path)
+        if df is None:
+            return
+
+        # Re-load full columns since load_swift_file may simplify.
+        raw_file = str(file_path)
+        if raw_file.endswith(".csv"):
+            full = pd.read_csv(raw_file, comment="#")
+        elif raw_file.endswith(".xlsx"):
+            full = pd.read_excel(raw_file)
+        else:
+            return
+        full.columns = [str(c).strip().lower() for c in full.columns]
+
+        if "wse" not in full.columns or "discharge" not in full.columns:
+            return  # no rating curve data
+
+        full["wse"] = pd.to_numeric(full["wse"], errors="coerce")
+        full["discharge"] = pd.to_numeric(full["discharge"], errors="coerce")
+        rc = full.dropna(subset=["wse", "discharge"]).copy()
+        rc = rc[rc["discharge"] > 0]
+        if rc.empty or len(rc) < 2:
+            return
+
+        rc = rc.sort_values("wse").drop_duplicates(subset="wse")
+
+        out_dir, prefix, _ = _resolve_plot_context(file_path, image_root, include_images_subdir)
+
+        fig, ax = plt.subplots(figsize=(9, 7), constrained_layout=True)
+        _apply_professional_style(ax)
+
+        ax.plot(
+            rc["wse"],
+            rc["discharge"],
+            color="#2a6f97",
+            linewidth=1.6,
+            alpha=0.9,
+            label="Rating Curve",
+        )
+
+        ax.set_xlabel("Water Surface Elevation / Stage (m)", fontsize=10)
+        ax.set_ylabel("Discharge (m³/s)", fontsize=10)
+        title = file_path.stem.replace("_", " ") + " – Rating Curve"
+        ax.set_title(title, fontsize=12, fontweight="bold", loc="left")
+
+        # Attempt to annotate with RC source/method.
+        rc_source = None
+        rc_method = None
+        if "discharge_source" in full.columns:
+            rc_source = full["discharge_source"].dropna().iloc[0] if not full["discharge_source"].dropna().empty else None
+        if "discharge_method" in full.columns:
+            methods = full["discharge_method"].dropna().unique()
+            rc_method = ", ".join(str(m) for m in methods) if len(methods) else None
+
+        stat_lines = [
+            f"n = {len(rc):,}",
+            f"H range: {rc['wse'].min():.2f} – {rc['wse'].max():.2f} m",
+            f"Q range: {rc['discharge'].min():.1f} – {rc['discharge'].max():.1f} m³/s",
+        ]
+        if rc_method:
+            stat_lines.append(f"Method: {rc_method}")
+        if rc_source:
+            stat_lines.append(f"Source: {rc_source}")
+        stats_txt = "\n".join(stat_lines)
+
+        ax.text(
+            0.03,
+            0.97,
+            stats_txt,
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=8.5,
+            bbox={
+                "boxstyle": "round,pad=0.35",
+                "facecolor": "white",
+                "alpha": 0.85,
+                "edgecolor": "#cccccc",
+            },
+        )
+
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(frameon=False, loc="lower right")
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        saved = []
+        if export_png:
+            png_path = out_dir / f"{prefix}{file_path.stem}_RC.png"
+            fig.savefig(png_path, dpi=300)
+            saved.append(str(png_path))
+        if export_svg:
+            svg_path = out_dir / f"{prefix}{file_path.stem}_RC.svg"
+            fig.savefig(svg_path)
+            saved.append(str(svg_path))
+        plt.close(fig)
+        if saved:
+            print("Saved RC plot:", ", ".join(saved))
+    except Exception as e:
+        print("RC plot failed:", file_path.name, "|", str(e))
+
 
 def collect_files(input_path):
     input_path = Path(input_path)

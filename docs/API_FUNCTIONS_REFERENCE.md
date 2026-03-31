@@ -23,7 +23,7 @@ Returns a WRIS station discovery table.
 
 Parameters:
 
-- `basin`: basin name, basin ID, or list of them
+- `basin`: basin name, basin ID, list of them, or `'all'` for all WRIS basins
 - `variable`: WRIS variable name/flag or list of them
 - `delay`: delay between API requests in seconds
 - `state`: currently unsupported for WRIS filtering; non-empty values raise an error
@@ -36,7 +36,7 @@ Downloads WRIS time series for explicit basin/variable inputs.
 
 Parameter notes:
 
-- `basin` is required.
+- `basin` is required. Use `'all'` to download all 17 WRIS basins.
 - `variable` is required.
 - `station` and `stations` are aliases; provide only one.
 - `format` is `csv` or `xlsx`.
@@ -55,7 +55,7 @@ Returns CWC station metadata.
 Parameters:
 
 - `station`: station code or list of codes
-- `basin`: basin filter or list of basin filters
+- `basin`: basin filter, list of basin filters, or `'all'` for no filtering
 - `river`: river filter
 - `state`: state filter or list of state filters
 - `refresh`: refresh station metadata from the live API before filtering
@@ -69,7 +69,7 @@ Columns:
 - `basin`
 - `station_count`
 
-#### `hydroswift.cwc.download(station=None, *, variable=None, basin=None, start_date=None, end_date=None, output_dir='output', format='csv', overwrite=False, merge=False, plot=False, quiet=False, refresh=False, _name_by=None, _gpkg_group=None)`
+#### `hydroswift.cwc.download(station=None, *, variable=None, rc_discharge=True, basin=None, start_date=None, end_date=None, output_dir='output', format='csv', overwrite=False, merge=False, plot=False, quiet=False, refresh=False, _name_by=None, _gpkg_group=None)`
 
 Downloads CWC time series.
 
@@ -77,7 +77,8 @@ Normal user-facing parameters are:
 
 - `station`
 - `variable` (`water_level`/`wl` and `discharge`/`q`)
-- `basin`
+- `rc_discharge` (controls computation of discharge from RC curves)
+- `basin` (use `'all'` for all CWC stations)
 - `start_date`
 - `end_date`
 - `output_dir`
@@ -91,6 +92,7 @@ Normal user-facing parameters are:
 Notes:
 
 - CWC downloads include water level; discharge is RC-derived when requested and RC curves are available locally (`swift_app/RC.csv`).
+- `rc_discharge` toggles this RC curve capability (default is `True`).
 - If both `station` and `basin` are provided, HydroSwift downloads only matching stations.
 - `_name_by` and `_gpkg_group` are internal dispatch parameters and should not be part of normal user code.
 
