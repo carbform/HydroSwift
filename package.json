@@ -1,0 +1,24 @@
+{
+  "name": "hydroswift",
+  "version": "1.0.0",
+  "description": "![Tests](https://github.com/carbform/swift/actions/workflows/tests.yml/badge.svg) [![Documentation](https://readthedocs.org/projects/hydroswift/badge/?version=latest)](https://hydroswift.readthedocs.io/)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/carbform/HydroSwift.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/carbform/HydroSwift/issues"
+  },
+  "homepage": "https://github.com/carbform/HydroSwift#readme"
+}
