@@ -116,7 +116,15 @@ def nwdp_download(resource_id: str = None, query: str = None, org: str = None, g
             
         out_dir.mkdir(parents=True, exist_ok=True)
         
-        out_path = out_dir / f"{safe_res_name}.{format}"
+        # Calculate time range
+        time_range = ""
+        date_cols = [c for c in df.columns if "date" in c.lower() or "time" in c.lower() or "monitoring" in c.lower()]
+        if date_cols:
+            s = pd.to_datetime(df[date_cols[0]], errors="coerce").dropna()
+            if not s.empty:
+                time_range = f"_{s.min().strftime('%Y%m%d')}_{s.max().strftime('%Y%m%d')}"
+                
+        out_path = out_dir / f"NWDP_{final_org_name}_{safe_res_name}{time_range}.{format}"
         
         if format.lower() == "csv":
             df.to_csv(out_path, index=False)
@@ -164,7 +172,15 @@ def nwdp_download(resource_id: str = None, query: str = None, org: str = None, g
             out_dir = Path(output_dir) / "nwdp" / org_name
             out_dir.mkdir(parents=True, exist_ok=True)
             
-            out_path = out_dir / f"{safe_res_name}.{format}"
+            # Calculate time range
+            time_range = ""
+            date_cols = [c for c in df.columns if "date" in c.lower() or "time" in c.lower() or "monitoring" in c.lower()]
+            if date_cols:
+                s = pd.to_datetime(df[date_cols[0]], errors="coerce").dropna()
+                if not s.empty:
+                    time_range = f"_{s.min().strftime('%Y%m%d')}_{s.max().strftime('%Y%m%d')}"
+                    
+            out_path = out_dir / f"NWDP_{org_name}_{safe_res_name}{time_range}.{format}"
             
             if format.lower() == "csv":
                 df.to_csv(out_path, index=False)

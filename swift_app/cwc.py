@@ -940,23 +940,18 @@ def download_station(station, output_dir, args):
     lat = station.get("lat")
     lon = station.get("lon")
 
-    safe_name = (
-        name.replace("/", "-")
-        .replace(" ", "_")
-        .replace("(", "")
-        .replace(")", "")
-        .lower()
-    )
+    safe_name = "".join([c if c.isalnum() else "_" for c in name]).strip("_")
+    basin_name = str(station.get("basin", "Unknown")).replace(" ", "")
 
     ext = args.format
-
-    outfile = os.path.join(output_dir, f"{code}_{safe_name}.{ext}")
 
     # ---------------------------------------------------------
     # Skip existing file unless overwrite
     # ---------------------------------------------------------
-
-    if os.path.exists(outfile) and not args.overwrite:
+    
+    import glob
+    existing = glob.glob(os.path.join(output_dir, f"CWC_{basin_name}_{safe_name}_*.{ext}"))
+    if existing and not args.overwrite:
         return "skipped"
 
     # ---------------------------------------------------------
@@ -1051,6 +1046,25 @@ def download_station(station, output_dir, args):
         "lon",
     ]
     df = df[[c for c in cols if c in df.columns]]
+
+    # ---------------------------------------------------------
+    # Generate standard filename
+    # ---------------------------------------------------------
+    
+    time_range = ""
+    if not df.empty and "time" in df.columns:
+        time_range = f"_{df['time'].min().strftime('%Y%m%d')}_{df['time'].max().strftime('%Y%m%d')}"
+        
+    var_names = [c for c in df.columns if c not in ["time", "lat", "lon", "station_code", "wse", "q", "water_level_status", "discharge_status", "discharge_rc_method"]]
+    var_str = "-".join(var_names) if var_names else "Data"
+    if "water_level" in df.columns and "discharge" in df.columns:
+        var_str = "WL-DISCHARG"
+    elif "water_level" in df.columns:
+        var_str = "WL"
+    elif "discharge" in df.columns:
+        var_str = "DISCHARG"
+
+    outfile = os.path.join(output_dir, f"CWC_{basin_name}_{safe_name}_{var_str}{time_range}.{ext}")
 
     # ---------------------------------------------------------
     # Build metadata header (WRIS-style, but for CWC)

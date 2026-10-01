@@ -60,14 +60,6 @@ def _save_timeseries(args, base_output, folder, meta, station, dataset, df, var_
     lat = meta.get("latitude", "")
     lon = meta.get("longitude", "")
 
-    ext = args.format.lower()
-    filename = f"{station}_{station_name}_{dataset}.{ext}"
-
-    output_path = os.path.join(base_output, folder, filename)
-
-    if os.path.exists(output_path) and not args.overwrite:
-        return None
-
     df = df.copy()
 
     # ---------------------------------------------------------
@@ -77,6 +69,19 @@ def _save_timeseries(args, base_output, folder, meta, station, dataset, df, var_
     df["station_code"] = station
     df["time"] = pd.to_datetime(df["time"], errors="coerce")
     df = df.dropna(subset=["time"])
+    
+    time_range = ""
+    if not df.empty:
+        time_range = f"_{df['time'].min().strftime('%Y%m%d')}_{df['time'].max().strftime('%Y%m%d')}"
+
+    ext = args.format.lower()
+    safe_station = station_name.replace(" ", "_")
+    filename = f"WRIS_{args.basin}_{safe_station}_{dataset}{time_range}.{ext}"
+
+    output_path = os.path.join(base_output, folder, filename)
+
+    if os.path.exists(output_path) and not args.overwrite:
+        return None
 
     if "value" in df.columns:
         df.rename(columns={"value": var_col}, inplace=True)
