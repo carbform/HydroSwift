@@ -32,19 +32,10 @@ class LoggerWidget(QTextEdit):
         self.setMaximumHeight(150)
         
         # Configure font
-        font = QFont("Courier")
-        font.setPointSize(9)
+        font = QFont("Cascadia Code, Consolas, Fira Code, monospace")
+        font.setStyleHint(QFont.Monospace)
+        font.setPointSize(10)
         self.setFont(font)
-        
-        # Configure document margins
-        self.setStyleSheet("""
-            QTextEdit {
-                background-color: #f5f5f5;
-                border: 1px solid #cccccc;
-                border-radius: 4px;
-                padding: 5px;
-            }
-        """)
 
     def append_log(
         self,

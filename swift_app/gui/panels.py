@@ -1021,8 +1021,8 @@ class NWDPDiscoveryPanel(QWidget):
         # Table
         layout.addWidget(QLabel("Discovered Datasets:"))
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Dataset Title", "Organization", "Format", "Resource ID"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Dataset Title", "Organization", "Variable", "Resolution", "Resource ID"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.MultiSelection)
         header = self.table.horizontalHeader()
@@ -1066,8 +1066,9 @@ class NWDPDiscoveryPanel(QWidget):
                 for i, row in self.datasets_df.iterrows():
                     self.table.setItem(i, 0, QTableWidgetItem(str(row.get("dataset_title", ""))))
                     self.table.setItem(i, 1, QTableWidgetItem(str(row.get("organization", ""))))
-                    self.table.setItem(i, 2, QTableWidgetItem(str(row.get("format", ""))))
-                    self.table.setItem(i, 3, QTableWidgetItem(str(row.get("resource_id", ""))))
+                    self.table.setItem(i, 2, QTableWidgetItem(str(row.get("variable", ""))))
+                    self.table.setItem(i, 3, QTableWidgetItem(str(row.get("resolution", ""))))
+                    self.table.setItem(i, 4, QTableWidgetItem(str(row.get("resource_id", ""))))
                 self.dl_btn.setEnabled(True)
                 self.log_message.emit(f"Found {len(self.datasets_df)} datasets.", "SUCCESS")
                 
@@ -1091,7 +1092,7 @@ class NWDPDiscoveryPanel(QWidget):
         
         selected_items = [
             (
-                self.table.item(r, 3).text(),  # rid
+                self.table.item(r, 4).text(),  # rid
                 self.table.item(r, 0).text(),  # title
                 self.table.item(r, 1).text()   # org
             )

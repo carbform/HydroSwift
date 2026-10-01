@@ -76,6 +76,7 @@ def nwdp_datasets(query: str = None, org: str = None, group: str = None):
     results = client.search_datasets(query=query, org=org, group=group)
     df = pd.DataFrame(results)
     if not df.empty:
+        df[["variable", "resolution"]] = df["dataset_title"].apply(lambda x: pd.Series(_parse_nwdp_title(x)))
         df.attrs["source"] = "nwdp"
     return df
 
@@ -215,3 +216,38 @@ class _NwdpNamespace:
     def download(resource_id: str = None, query: str = None, org: str = None, group: str = None, filters: dict = None, output_dir="output", format="csv", quiet=False):
         """Download NWDP datasets by search criteria or resource ID."""
         return nwdp_download(resource_id=resource_id, query=query, org=org, group=group, filters=filters, output_dir=output_dir, format=format, quiet=quiet)
+import re
+
+def _parse_nwdp_title(title):
+    title = str(title).replace("(", " ").replace(")", " ").replace(",", " ")
+    
+    # Resolution extraction
+    resolution = "Unknown"
+    lower_title = title.lower()
+    if "hourly" in lower_title:
+        resolution = "Hourly"
+    elif "daily" in lower_title:
+        resolution = "Daily"
+    elif "monthly" in lower_title:
+        resolution = "Monthly"
+    elif "quarterly" in lower_title:
+        resolution = "Quarterly"
+    elif "yearly" in lower_title or "annual" in lower_title:
+        resolution = "Yearly"
+        
+    # Variable extraction
+    var = title
+    for kw in ["Telemetry", "Manual", "CWC", "CGWB", "Department", "202"]:
+        idx = var.find(kw)
+        if idx > 0:
+            var = var[:idx]
+    
+    var = var.strip(" -()[],")
+    if "Rainfall" in var: var = "Rainfall"
+    if "Ground Water Level" in var: var = "Ground Water Level"
+    if "River Water Level" in var or "Surface Water Level" in var: var = "Surface Water Level"
+    if "Wind Speed" in var: var = "Wind Speed"
+    if "Temperature" in var: var = "Temperature"
+    if "Discharge" in var: var = "Discharge"
+    
+    return var, resolution

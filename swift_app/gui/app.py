@@ -35,6 +35,12 @@ def run_gui():
     except ImportError:
         pass
         
+    from PyQt5.QtGui import QFont
+    # Use modern Sans-Serif font globally
+    font = QFont("Segoe UI, Noto Sans, Ubuntu, sans-serif")
+    font.setPointSize(11)
+    app.setFont(font)
+        
     window = HydroSwiftGUI()
     window.show()
     
