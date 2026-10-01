@@ -201,7 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     misc = parser.add_argument_group("Misc")
     misc.add_argument(
-        "--gui", action="store_true", help="Launch the HydroSwift Graphical User Interface (Web-based)"
+        "--gui", action="store_true", help="Launch the HydroSwift Graphical User Interface (Native Desktop App)"
     )
     misc.add_argument("--quiet", action="store_true", help="Suppress console output")
     misc.add_argument("--list", action="store_true", help="List available WRIS basins and CWC station count")

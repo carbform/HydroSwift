@@ -151,8 +151,8 @@ def main() -> int:
     # GUI Mode
     # ---------------------------------------------------------
     if getattr(args, "gui", False):
-        from .gui import launch_gui
-        return launch_gui()
+        from .gui.app import run_gui
+        return run_gui()
 
     # ---------------------------------------------------------
     # Coffee ☕
