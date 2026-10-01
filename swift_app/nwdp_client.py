@@ -73,6 +73,10 @@ class NwdpClient:
                         org_title = pkg.get("organization", {}).get("title", "")
                         org_name = pkg.get("organization", {}).get("name", "")
                         for res in pkg.get("resources", []):
+                            size = res.get("size")
+                            if size is not None and isinstance(size, int) and size <= 300:
+                                continue  # Skip empty datasets (likely just headers)
+                                
                             results.append({
                                 "dataset_title": pkg.get("title"),
                                 "organization": org_title,
