@@ -185,6 +185,7 @@ class HydroSwiftGUI(QMainWindow):
         # Wire download completion
         self.nwdp_panel.download_completed.connect(self._on_download_completed)
         self.wris_panel.download_completed.connect(self._on_download_completed)
+        self.cwc_panel.download_completed.connect(self._on_download_completed)
 
     def _update_status(self, message: str) -> None:
         """Update the status bar message."""

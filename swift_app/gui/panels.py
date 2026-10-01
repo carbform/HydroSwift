@@ -418,6 +418,7 @@ class CWCDownloadPanel(QWidget):
     
     status_changed = pyqtSignal(str)
     log_message = pyqtSignal(str, str)
+    download_completed = pyqtSignal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -598,6 +599,7 @@ class CWCDownloadPanel(QWidget):
             f"✓ Downloaded {result.get('files_saved')} CWC stations",
             "success"
         )
+        self.download_completed.emit(result)
 
     @pyqtSlot(str)
     def _on_download_error(self, error: str) -> None:
@@ -1119,7 +1121,11 @@ class NWDPDiscoveryPanel(QWidget):
             if success:
                 self.log_message.emit(msg, "SUCCESS")
                 self.status_changed.emit("NWDP Downloads complete")
-                self.download_completed.emit({"source": "nwdp"})
+                self.download_completed.emit({
+                    "source": "nwdp",
+                    "files_saved": len(selected_rids),
+                    "output_dir": str(self.output_dir)
+                })
             else:
                 self.log_message.emit(f"Download failed: {msg}", "ERROR")
                 self.status_changed.emit("NWDP Download error")
