@@ -1,6 +1,6 @@
 # India-WRIS API for Future versions
 
-The official India-WRIS APIs (`https://indiawris.gov.in/swagger-ui/index.html`) are still UI-based, need some time to corrcetly integrate them into HydroSwift. 
+The official India-WRIS APIs (`https://nwdp.nwic.gov.in/dataset_api/home_api_page`) are still UI-based, need some time to correctly integrate them into HydroSwift. 
 
 It is intended as a roadmap for future v1.x or v2.0 upgrades.
 
@@ -32,9 +32,9 @@ The WRIS API also exposes Master Administrative endpoints that allow navigation 
 
 ## 3. Public WRIS Developer APIs vs Internal Portal APIs
 
-Currently, `wris_client.py` scrapes its data from the semi-undocumented endpoints powering the `indiawris.gov.in` web portal (`/v2/` / CommonDataSetMasterAPI). 
+Currently, `wris_client.py` scrapes its data from the semi-undocumented endpoints powering the `https://nwic.in/wris/#/timeseriesdata` web portal (`/v2/` / CommonDataSetMasterAPI). 
 
-The WRIS portal also recently released official Public Developer APIs (`https://indiawris.gov.in/v3/api-docs` / Telemetry Data Service). 
+The WRIS portal also recently released official Public Developer APIs (`https://nwdp.nwic.gov.in/dataset_api/home_api_page` / Telemetry Data Service). 
 
 **Future consideration:**
 

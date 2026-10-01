@@ -60,6 +60,7 @@ def main() -> int:
     from .wris import run_wris_download
     from .cwc import run_cwc_download
     from .merge import merge_dataset_folder
+    from .swot_merge import build_swot_gpkg
 
     raw_argv = sys.argv[1:]
     banner_already_printed = False
@@ -91,9 +92,48 @@ def main() -> int:
     # No arguments → show help
     # ---------------------------------------------------------
 
+    # ---------------------------------------------------------
+    # No arguments → interactive mode
+    # ---------------------------------------------------------
+
     if len(sys.argv) == 1:
-        parser.print_help()
-        return 0
+        from .interactive import run_interactive
+        
+        # We need a dummy parser namespace to pass defaults to run_interactive
+        class DummyArgs:
+            pass
+        args = DummyArgs()
+        args.output_dir = "output"
+        args.quiet = False
+        args.q = False
+        args.wl = False
+        args.rf = False
+        args.merge = False
+        args.cwc = False
+        args.cwc_basin_filter = None
+        args.interface = "cli"
+        args.delay = 0.25
+        args.overwrite = False
+        
+        # Provide any defaults required by WRIS/CWC
+        args.temp = False
+        args.rh = False
+        args.solar = False
+        args.sed = False
+        args.gwl = False
+        args.atm = False
+        args.start_date = "1950-01-01"
+        import time
+        args.end_date = time.strftime("%Y-%m-%d")
+        args.cwc_refresh = False
+        args.cwc_rc_discharge = True
+        args.metadata = False
+        
+        try:
+            return run_interactive(args)
+        except KeyboardInterrupt:
+            print("\nOperation cancelled.")
+            return 1
 
     # ---------------------------------------------------------
     # Banner parsing & Quiet mode
@@ -106,6 +146,13 @@ def main() -> int:
     # and avoid duplicate output if it was already shown for meta commands.
     if not args.quiet and not banner_already_printed:
         print_wish_banner()
+
+    # ---------------------------------------------------------
+    # GUI Mode
+    # ---------------------------------------------------------
+    if getattr(args, "gui", False):
+        from .gui import launch_gui
+        return launch_gui()
 
     # ---------------------------------------------------------
     # Coffee ☕
@@ -203,6 +250,18 @@ def main() -> int:
         return 0
 
     # ---------------------------------------------------------
+    # SWOT-MERGE MODE
+    # ---------------------------------------------------------
+
+    if getattr(args, "swot_merge", False):
+        build_swot_gpkg(
+            output_dir=args.output_dir,
+            output_path=getattr(args, "swot_output", None),
+            overwrite=args.overwrite,
+        )
+        return 0
+
+    # ---------------------------------------------------------
     # PLOT-ONLY MODE
     # ---------------------------------------------------------
 
@@ -255,6 +314,55 @@ def main() -> int:
 
     if args.cwc or args.cwc_station or getattr(args, "cwc_basin_filter", None):
         return run_cwc_download(args)
+
+    # ---------------------------------------------------------
+    # NWDP download
+    # ---------------------------------------------------------
+
+    has_nwdp_search = any([
+        getattr(args, "nwdp_org", None),
+        getattr(args, "nwdp_group", None),
+        getattr(args, "nwdp_query", None)
+    ])
+
+    if getattr(args, "nwdp_resource", None) or has_nwdp_search:
+        import json
+        filters = None
+        if getattr(args, "nwdp_filters", None):
+            try:
+                filters = json.loads(args.nwdp_filters)
+            except Exception as e:
+                print(f"Error parsing NWDP filters: {e}")
+                return 1
+                
+        from .nwdp import nwdp_download, nwdp_datasets
+        
+        resources = []
+        if getattr(args, "nwdp_resource", None):
+            resources.append(args.nwdp_resource)
+            
+        if has_nwdp_search:
+            df = nwdp_datasets(
+                query=getattr(args, "nwdp_query", None),
+                org=getattr(args, "nwdp_org", None),
+                group=getattr(args, "nwdp_group", None)
+            )
+            if not df.empty:
+                resources.extend(df["resource_id"].dropna().unique())
+            else:
+                print("No datasets matched the NWDP search criteria.")
+                
+        if not resources:
+            return 1
+            
+        for rid in resources:
+            nwdp_download(
+                resource_id=rid,
+                filters=filters,
+                output_dir=args.output_dir,
+                quiet=args.quiet
+            )
+        return 0
 
     # ---------------------------------------------------------
     # Citation

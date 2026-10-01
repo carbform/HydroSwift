@@ -25,8 +25,8 @@ BASIN_API = BASE + "/basin/getMasterBasin"
 HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Content-Type": "application/json",
-    "Origin": "https://indiawris.gov.in",
-    "Referer": "https://indiawris.gov.in/wris/",
+    "Origin": "https://nwic.in",
+    "Referer": "https://nwic.in/wris/",
     "User-Agent": "Mozilla/5.0",
 }
 

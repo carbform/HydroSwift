@@ -1,0 +1,523 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "a983557b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import hydroswift as hs"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3f356385",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "hs.wris.basins()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "97760f67",
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>basin</th>\n",
+       "      <th>station_count</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>Barak and Others</td>\n",
+       "      <td>42</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>Brahmani and Baitarni</td>\n",
+       "      <td>21</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>Brahmaputra</td>\n",
+       "      <td>139</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>Cauvery</td>\n",
+       "      <td>53</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>East flowing rivers between Mahanadi and Pennar</td>\n",
+       "      <td>21</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>5</th>\n",
+       "      <td>East flowing rivers between Pennar and Kanyaku...</td>\n",
+       "      <td>39</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>6</th>\n",
+       "      <td>Ganga</td>\n",
+       "      <td>537</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>7</th>\n",
+       "      <td>Godavari</td>\n",
+       "      <td>90</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>8</th>\n",
+       "      <td>Indus</td>\n",
+       "      <td>18</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>9</th>\n",
+       "      <td>Krishna</td>\n",
+       "      <td>85</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>10</th>\n",
+       "      <td>Mahanadi</td>\n",
+       "      <td>60</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>11</th>\n",
+       "      <td>Mahi</td>\n",
+       "      <td>12</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>12</th>\n",
+       "      <td>Minor rivers draining into Myanmar and Bangladesh</td>\n",
+       "      <td>4</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>13</th>\n",
+       "      <td>Narmada</td>\n",
+       "      <td>26</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>14</th>\n",
+       "      <td>Pennar</td>\n",
+       "      <td>13</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>15</th>\n",
+       "      <td>Sabarmati</td>\n",
+       "      <td>6</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>16</th>\n",
+       "      <td>Subernarekha</td>\n",
+       "      <td>20</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>17</th>\n",
+       "      <td>Tapi</td>\n",
+       "      <td>25</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>18</th>\n",
+       "      <td>West flowing rivers from Tadri to Kanyakumari</td>\n",
+       "      <td>33</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>19</th>\n",
+       "      <td>West flowing rivers from Tapi to Tadri</td>\n",
+       "      <td>26</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>20</th>\n",
+       "      <td>West flowing rivers of Kutch and Saurashtra in...</td>\n",
+       "      <td>10</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>21</th>\n",
+       "      <td>Yamuna Basin</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "HydroSwift Table\n",
+       "Rows: 22 | Columns: 2\n",
+       "----------------------------------------\n",
+       "                                                basin  station_count\n",
+       "0                                    Barak and Others             42\n",
+       "1                               Brahmani and Baitarni             21\n",
+       "2                                         Brahmaputra            139\n",
+       "3                                             Cauvery             53\n",
+       "4     East flowing rivers between Mahanadi and Pennar             21\n",
+       "5   East flowing rivers between Pennar and Kanyaku...             39\n",
+       "6                                               Ganga            537\n",
+       "7                                            Godavari             90\n",
+       "8                                               Indus             18\n",
+       "9                                             Krishna             85\n",
+       "10                                           Mahanadi             60\n",
+       "11                                               Mahi             12\n",
+       "12  Minor rivers draining into Myanmar and Bangladesh              4\n",
+       "13                                            Narmada             26\n",
+       "14                                             Pennar             13\n",
+       "15                                          Sabarmati              6\n",
+       "16                                       Subernarekha             20\n",
+       "17                                               Tapi             25\n",
+       "18      West flowing rivers from Tadri to Kanyakumari             33\n",
+       "19             West flowing rivers from Tapi to Tadri             26\n",
+       "20  West flowing rivers of Kutch and Saurashtra in...             10\n",
+       "21                                       Yamuna Basin              1"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "hs.cwc.basins()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "75c0fb6d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# List of all 17 basin IDs extracted from your table\n",
+    "all_basin_ids = [ 15, 16, 17]\n",
+    "\n",
+    "# You can also generate this quickly using list(range(1, 18))\n",
+    "\n",
+    "hs.wris.download(\n",
+    "    basin=all_basin_ids,\n",
+    "    variable=['q'],\n",
+    "    start_date='2020-01-01', \n",
+    "    end_date='2026-03-02', \n",
+    "    overwrite=True\n",
+    ")\n",
+    "# hs.wris.download(basin =[1,2],\n",
+    "# variable = ['q'],\n",
+    "#  start_date='2020-01-01', \n",
+    "#  end_date='2026-03-02', overwrite = True\n",
+    "# )"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "bbd93ae7",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Starting CWC download for station=None from 2010-01-01 to 2026-03-02...\n",
+      "\n",
+      "\u001b[95m\u001b[1mDataset: water_level (CWC)\u001b[0m\n",
+      "\u001b[96mMode: CWC download | Stations: 309 | Format: CSV | Time range: 2010–2026\u001b[0m\n",
+      "\u001b[96mBasin filter: Cauvery, Krishna, Godavari, Mahanadi\u001b[0m\n",
+      "\u001b[3mNote: The CWC servers stream full historical datasets at slow speeds (~100 KB/s).\u001b[0m\n",
+      "\u001b[3mA single station may take 1-2 minutes to appear on the progress bar. Please do not cancel the process.\u001b[0m\n",
+      "\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "water_level: 100%|██████████| 309/309 [00:00<00:00, 24083.25station/s]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Saved GeoPackage: output/cwc/cwc_waterlevel_all_stations_2010-01-01_2026-03-02.gpkg (12271282 rows)\n",
+      "\n",
+      "\u001b[92m\u001b[1mwater_level downloaded in 928.7 seconds\u001b[0m\n",
+      "\n",
+      "-------------------------------------------------------------\n",
+      "Download Summary\n",
+      "-------------------------------------------------------------\n",
+      "Dataset           Selected  Attempted  Downloaded  Skipped  NoData/Fail  Time(s)\n",
+      "-------------------------------------------------------------\n",
+      "water_level       309       309        289         0        20           928.7\n",
+      "-------------------------------------------------------------\n",
+      "Output directory: output/cwc\n",
+      "-------------------------------------------------------------\n"
+     ]
+    }
+   ],
+   "source": [
+    "hs.cwc.download(basin=['Cauvery','Krishna','Godavari','Mahanadi'], start_date='2010-01-01', end_date='2026-03-02', rc_discharge=True, overwrite=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "7302c7a0",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import hydroswift\n",
+    "stations = hydroswift.cwc.stations(\n",
+    "    basin=[\"Godavari\", \"Krishna\"],\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "352120af",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Starting CWC download for station=None from 2010-01-01 to 2026-03-02...\n"
+     ]
+    },
+    {
+     "ename": "ValueError",
+     "evalue": "No matching CWC stations found",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[31m---------------------------------------------------------------------------\u001b[39m",
+      "\u001b[31mValueError\u001b[39m                                Traceback (most recent call last)",
+      "\u001b[36mCell\u001b[39m\u001b[36m \u001b[39m\u001b[32mIn[6]\u001b[39m\u001b[32m, line 1\u001b[39m\n\u001b[32m----> \u001b[39m\u001b[32m1\u001b[39m \u001b[43mhs\u001b[49m\u001b[43m.\u001b[49m\u001b[43mcwc\u001b[49m\u001b[43m.\u001b[49m\u001b[43mdownload\u001b[49m\u001b[43m(\u001b[49m\u001b[43mbasin\u001b[49m\u001b[43m=\u001b[49m\u001b[33;43m'\u001b[39;49m\u001b[33;43mall\u001b[39;49m\u001b[33;43m'\u001b[39;49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mstart_date\u001b[49m\u001b[43m=\u001b[49m\u001b[33;43m'\u001b[39;49m\u001b[33;43m2010-01-01\u001b[39;49m\u001b[33;43m'\u001b[39;49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mend_date\u001b[49m\u001b[43m=\u001b[49m\u001b[33;43m'\u001b[39;49m\u001b[33;43m2026-03-02\u001b[39;49m\u001b[33;43m'\u001b[39;49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mrc_discharge\u001b[49m\u001b[43m=\u001b[49m\u001b[38;5;28;43;01mTrue\u001b[39;49;00m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43moverwrite\u001b[49m\u001b[43m=\u001b[49m\u001b[38;5;28;43;01mTrue\u001b[39;49;00m\u001b[43m)\u001b[49m\n",
+      "\u001b[36mFile \u001b[39m\u001b[32m~/HydroSwift/swift_app/api.py:1287\u001b[39m, in \u001b[36m_CwcNamespace.download\u001b[39m\u001b[34m(station, variable, rc_discharge, basin, start_date, end_date, output_dir, format, overwrite, merge, plot, quiet, refresh, _name_by, _gpkg_group)\u001b[39m\n\u001b[32m   1281\u001b[39m \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;28misinstance\u001b[39m(station, pd.DataFrame) \u001b[38;5;129;01mor\u001b[39;00m \u001b[38;5;28misinstance\u001b[39m(basin, pd.DataFrame):\n\u001b[32m   1282\u001b[39m     \u001b[38;5;28;01mraise\u001b[39;00m \u001b[38;5;167;01mTypeError\u001b[39;00m(\n\u001b[32m   1283\u001b[39m         \u001b[33m\"\u001b[39m\u001b[33mswift.cwc.download() accepts explicit station/basin values only. \u001b[39m\u001b[33m\"\u001b[39m\n\u001b[32m   1284\u001b[39m         \u001b[33m\"\u001b[39m\u001b[33mFor CWC station/basin tables, use swift.fetch(table, ...).\u001b[39m\u001b[33m\"\u001b[39m\n\u001b[32m   1285\u001b[39m     )\n\u001b[32m-> \u001b[39m\u001b[32m1287\u001b[39m \u001b[38;5;28;01mreturn\u001b[39;00m \u001b[43mget_cwc_data\u001b[49m\u001b[43m(\u001b[49m\n\u001b[32m   1288\u001b[39m \u001b[43m    \u001b[49m\u001b[43mstation\u001b[49m\u001b[43m=\u001b[49m\u001b[43mstation\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1289\u001b[39m \u001b[43m    \u001b[49m\u001b[43mvar\u001b[49m\u001b[43m=\u001b[49m\u001b[43mvariable\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1290\u001b[39m \u001b[43m    \u001b[49m\u001b[43mrc_discharge\u001b[49m\u001b[43m=\u001b[49m\u001b[43mrc_discharge\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1291\u001b[39m \u001b[43m    \u001b[49m\u001b[43mbasin\u001b[49m\u001b[43m=\u001b[49m\u001b[43mbasin\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1292\u001b[39m \u001b[43m    \u001b[49m\u001b[43mstart_date\u001b[49m\u001b[43m=\u001b[49m\u001b[43mstart_date\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1293\u001b[39m \u001b[43m    \u001b[49m\u001b[43mend_date\u001b[49m\u001b[43m=\u001b[49m\u001b[43mend_date\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1294\u001b[39m \u001b[43m    \u001b[49m\u001b[43moutput_dir\u001b[49m\u001b[43m=\u001b[49m\u001b[43moutput_dir\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1295\u001b[39m \u001b[43m    \u001b[49m\u001b[38;5;28;43mformat\u001b[39;49m\u001b[43m=\u001b[49m\u001b[38;5;28;43mformat\u001b[39;49m\u001b[43m,\u001b[49m\n\u001b[32m   1296\u001b[39m \u001b[43m    \u001b[49m\u001b[43moverwrite\u001b[49m\u001b[43m=\u001b[49m\u001b[43moverwrite\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1297\u001b[39m \u001b[43m    \u001b[49m\u001b[43mmerge\u001b[49m\u001b[43m=\u001b[49m\u001b[43mmerge\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1298\u001b[39m \u001b[43m    \u001b[49m\u001b[43mplot\u001b[49m\u001b[43m=\u001b[49m\u001b[43mplot\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1299\u001b[39m \u001b[43m    \u001b[49m\u001b[43mquiet\u001b[49m\u001b[43m=\u001b[49m\u001b[43mquiet\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1300\u001b[39m \u001b[43m    \u001b[49m\u001b[43mrefresh\u001b[49m\u001b[43m=\u001b[49m\u001b[43mrefresh\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1301\u001b[39m \u001b[43m    \u001b[49m\u001b[43mname_by\u001b[49m\u001b[43m=\u001b[49m\u001b[43m_name_by\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1302\u001b[39m \u001b[43m    \u001b[49m\u001b[43mgpkg_group\u001b[49m\u001b[43m=\u001b[49m\u001b[43m_gpkg_group\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m   1303\u001b[39m \u001b[43m\u001b[49m\u001b[43m)\u001b[49m\n",
+      "\u001b[36mFile \u001b[39m\u001b[32m~/HydroSwift/swift_app/api.py:640\u001b[39m, in \u001b[36mget_cwc_data\u001b[39m\u001b[34m(station, var, basin, start_date, end_date, output_dir, format, overwrite, merge, plot, quiet, refresh, name_by, gpkg_group, rc_discharge)\u001b[39m\n\u001b[32m    637\u001b[39m basins = _normalize_cwc_basin_input(basin)\n\u001b[32m    639\u001b[39m \u001b[38;5;28;01mif\u001b[39;00m basins:\n\u001b[32m--> \u001b[39m\u001b[32m640\u001b[39m     basin_meta = \u001b[43mcwc_stations\u001b[49m\u001b[43m(\u001b[49m\u001b[43mbasin\u001b[49m\u001b[43m=\u001b[49m\u001b[43mbasins\u001b[49m\u001b[43m,\u001b[49m\u001b[43m \u001b[49m\u001b[43mrefresh\u001b[49m\u001b[43m=\u001b[49m\u001b[43mrefresh\u001b[49m\u001b[43m)\u001b[49m\n\u001b[32m    641\u001b[39m     basin_codes = _unique_preserve_order(\n\u001b[32m    642\u001b[39m         basin_meta[\u001b[33m\"\u001b[39m\u001b[33mcode\u001b[39m\u001b[33m\"\u001b[39m].dropna().tolist()\n\u001b[32m    643\u001b[39m     )\n\u001b[32m    645\u001b[39m     \u001b[38;5;28;01mif\u001b[39;00m \u001b[38;5;129;01mnot\u001b[39;00m basin_codes:\n",
+      "\u001b[36mFile \u001b[39m\u001b[32m~/HydroSwift/swift_app/api.py:986\u001b[39m, in \u001b[36mcwc_stations\u001b[39m\u001b[34m(station, basin, river, state, refresh)\u001b[39m\n\u001b[32m    949\u001b[39m \u001b[38;5;28;01mdef\u001b[39;00m\u001b[38;5;250m \u001b[39m\u001b[34mcwc_stations\u001b[39m(station=\u001b[38;5;28;01mNone\u001b[39;00m, basin=\u001b[38;5;28;01mNone\u001b[39;00m, river=\u001b[38;5;28;01mNone\u001b[39;00m, state=\u001b[38;5;28;01mNone\u001b[39;00m, refresh=\u001b[38;5;28;01mFalse\u001b[39;00m):\n\u001b[32m    950\u001b[39m \u001b[38;5;250m    \u001b[39m\u001b[33;03m\"\"\"\u001b[39;00m\n\u001b[32m    951\u001b[39m \u001b[33;03m    Return CWC flood-forecast station metadata.\u001b[39;00m\n\u001b[32m    952\u001b[39m \n\u001b[32m   (...)\u001b[39m\u001b[32m    984\u001b[39m \u001b[33;03m    >>> hydroswift.cwc.stations(basin=[\"Godavari\", \"Krishna\"], state=[\"Telangana\", \"Andhra Pradesh\"])\u001b[39;00m\n\u001b[32m    985\u001b[39m \u001b[33;03m    \"\"\"\u001b[39;00m\n\u001b[32m--> \u001b[39m\u001b[32m986\u001b[39m     df = \u001b[43mget_cwc_station_metadata\u001b[49m\u001b[43m(\u001b[49m\n\u001b[32m    987\u001b[39m \u001b[43m        \u001b[49m\u001b[43mstation\u001b[49m\u001b[43m=\u001b[49m\u001b[43mstation\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m    988\u001b[39m \u001b[43m        \u001b[49m\u001b[43mbasin\u001b[49m\u001b[43m=\u001b[49m\u001b[43mbasin\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m    989\u001b[39m \u001b[43m        \u001b[49m\u001b[43mriver\u001b[49m\u001b[43m=\u001b[49m\u001b[43mriver\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m    990\u001b[39m \u001b[43m        \u001b[49m\u001b[43mstate\u001b[49m\u001b[43m=\u001b[49m\u001b[43mstate\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m    991\u001b[39m \u001b[43m        \u001b[49m\u001b[43mrefresh\u001b[49m\u001b[43m=\u001b[49m\u001b[43mrefresh\u001b[49m\u001b[43m,\u001b[49m\n\u001b[32m    992\u001b[39m \u001b[43m    \u001b[49m\u001b[43m)\u001b[49m\n\u001b[32m    993\u001b[39m     out = SwiftTable(df.copy())\n\u001b[32m    994\u001b[39m     out.attrs[\u001b[33m\"\u001b[39m\u001b[33msource\u001b[39m\u001b[33m\"\u001b[39m] = \u001b[33m\"\u001b[39m\u001b[33mcwc\u001b[39m\u001b[33m\"\u001b[39m\n",
+      "\u001b[36mFile \u001b[39m\u001b[32m~/HydroSwift/swift_app/cwc.py:928\u001b[39m, in \u001b[36mget_cwc_station_metadata\u001b[39m\u001b[34m(station, basin, river, state, refresh)\u001b[39m\n\u001b[32m    922\u001b[39m     df = df[\n\u001b[32m    923\u001b[39m         df[\u001b[33m\"\u001b[39m\u001b[33mcode\u001b[39m\u001b[33m\"\u001b[39m].astype(\u001b[38;5;28mstr\u001b[39m).str.lower().str.contains(q, na=\u001b[38;5;28;01mFalse\u001b[39;00m)\n\u001b[32m    924\u001b[39m         | df[\u001b[33m\"\u001b[39m\u001b[33mname\u001b[39m\u001b[33m\"\u001b[39m].astype(\u001b[38;5;28mstr\u001b[39m).str.lower().str.contains(q, na=\u001b[38;5;28;01mFalse\u001b[39;00m)\n\u001b[32m    925\u001b[39m     ]\n\u001b[32m    927\u001b[39m \u001b[38;5;28;01mif\u001b[39;00m df.empty:\n\u001b[32m--> \u001b[39m\u001b[32m928\u001b[39m     \u001b[38;5;28;01mraise\u001b[39;00m \u001b[38;5;167;01mValueError\u001b[39;00m(\u001b[33m\"\u001b[39m\u001b[33mNo matching CWC stations found\u001b[39m\u001b[33m\"\u001b[39m)\n\u001b[32m    930\u001b[39m \u001b[38;5;28;01mreturn\u001b[39;00m df.sort_values(\u001b[33m\"\u001b[39m\u001b[33mcode\u001b[39m\u001b[33m\"\u001b[39m).reset_index(drop=\u001b[38;5;28;01mTrue\u001b[39;00m)\n",
+      "\u001b[31mValueError\u001b[39m: No matching CWC stations found"
+     ]
+    }
+   ],
+   "source": [
+    "hs.cwc.download(basin='all', start_date='2010-01-01', end_date='2026-03-02', rc_discharge=True, overwrite=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4f22bc9f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "stations"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "0115b6f1",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "hs.cwc.download( start_date='2020-01-01', end_date='2026-03-02', overwrite=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a824ec49",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import requests\n",
+    "import json\n",
+    "import pandas as pd\n",
+    "import datetime\n",
+    "from datetime import date\n",
+    "# import openpyxl\n",
+    "# from openpyxl.utils.dataframe import dataframe_to_rows\n",
+    "import os"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "84826a6d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\n",
+    "file_path_exp=\"home/saratchandra_ch/export/\"\n",
+    "\n",
+    "file_suffix='2020_2024.xlsx'\n",
+    "\n",
+    "sdate='2026-03-15' # yyyy-mm-dd\n",
+    "edate='2020-01-01' # yyyy-mm-dd\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4ea17bf3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "url = \"https://ffs.india-water.gov.in/iam/api/new-entry-data/specification/sorted\"\n",
+    "df_code=pd.read_excel('name-code.xlsx',index_col=0)\n",
+    "df_code['code_id']=df_code.index\n",
+    "df_code=df_code.reset_index(drop=True)\n",
+    "datetime_format = '%Y-%m-%dT%H:%M:%S'\n",
+    "\n",
+    "for index,df_code_ext in df_code.iloc[:].iterrows():\n",
+    "    st_code=df_code_ext['code_id']\n",
+    "    name_station=df_code_ext['name']\n",
+    "    print('extracting data for ::',name_station)\n",
+    "    try:\n",
+    "        params = {\n",
+    "            \"sort-criteria\": \"%7B%22sortOrderDtos%22:%5B%7B%22sortDirection%22:%22ASC%22,%22field%22:%22id.dataTime%22%7D%5D%7D\",\n",
+    "            \"specification\": f\"%7B%22where%22:%7B%22where%22:%7B%22where%22:%7B%22expression%22:%7B%22valueIsRelationField%22:false,%22fieldName%22:%22id.stationCode%22,%22operator%22:%22eq%22,%22value%22:%22{st_code}%22%7D%7D,%22and%22:%7B%22expression%22:%7B%22valueIsRelationField%22:false,%22fieldName%22:%22id.datatypeCode%22,%22operator%22:%22eq%22,%22value%22:%22HHS%22%7D%7D%7D,%22and%22:%7B%22expression%22:%7B%22valueIsRelationField%22:false,%22fieldName%22:%22dataValue%22,%22operator%22:%22null%22,%22value%22:%22false%22%7D%7D%7D,%22and%22:%7B%22expression%22:%7B%22valueIsRelationField%22:false,%22fieldName%22:%22id.dataTime%22,%22operator%22:%22btn%22,%22value%22:%22{sdate}T14:05:31.255,{edate}T14:05:31.255%22%7D%7D%7D\"\n",
+    "        }\n",
+    "\n",
+    "        headers = {\n",
+    "            \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\"\n",
+    "        }\n",
+    "\n",
+    "        response = requests.get(url, params=params, headers=headers)\n",
+    "        data = response.json()\n",
+    "\n",
+    "        df = pd.DataFrame()\n",
+    "        fl=[]\n",
+    "        for j in data[:]:\n",
+    "            try:\n",
+    "                ml=[j['stationCode'],datetime.datetime.strptime(j['id']['dataTime'],datetime_format),name_station,j['dataValue']]\n",
+    "                fl.append(ml)\n",
+    "            except:\n",
+    "                pass\n",
+    "        if fl:\n",
+    "            print('recieved data for :: ',name_station)\n",
+    "            fl=sorted(fl)\n",
+    "            df=pd.DataFrame(fl)\n",
+    "            df.columns=['code','time','name','WSE']\n",
+    "            df= df.drop(columns=['Unnamed: 0'])\n",
+    "            df.to_csv(file_path_new+name_station+new_file_suffix) # new file end\n",
+    "            print('Data exported for station ',name_station)\n",
+    "        else:\n",
+    "            print('Data export failed for XXXXXXXXXXXXXXXXX',name_station)\n",
+    "    except:\n",
+    "        print('Data not found for the station ',name_station)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "6348a975",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import hydroswift as hs"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b9ed5354",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "64cdf82f",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "stations = hs.cwc.stations()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "ca876fe5",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "hs.cwc.basin()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3b131606",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "stations\n",
+    "list = [i for i in stations['code']] \n",
+    "list"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "55a09847",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "hs.cwc.download(basin = ['Narmada'],\n",
+    "start_date = '2020-01-01',\n",
+    "end_date = '2026-03-02',\n",
+    "overwrite = True,\n",
+    "variable = 'q'\n",
+    ")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "carbform",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.13.7"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}

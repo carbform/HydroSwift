@@ -83,6 +83,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use CWC source (Python equivalent: hydroswift.cwc.download(...))",
     )
     source.add_argument(
+        "--nwdp-resource",
+        dest="nwdp_resource",
+        help="NWDP resource ID (Python equivalent: hydroswift.nwdp.download(resource_id=...))",
+    )
+    source.add_argument(
+        "--nwdp-state",
+        "--nwdp-org",
+        dest="nwdp_org",
+        help="NWDP State / Organization Name (e.g. 'Karnataka')",
+    )
+    source.add_argument(
+        "--nwdp-group",
+        dest="nwdp_group",
+        help="NWDP Group ID/Name (e.g. 'water-quantity')",
+    )
+    source.add_argument(
+        "--nwdp-query",
+        dest="nwdp_query",
+        help="NWDP Search query (e.g. 'Ground Water')",
+    )
+    source.add_argument(
+        "--nwdp-filters",
+        dest="nwdp_filters",
+        help="NWDP filters as JSON string (e.g. '{\"State\":\"Karnataka\"}')",
+    )
+    source.add_argument(
         "--cwc-station",
         "--station",
         dest="cwc_station",
@@ -121,6 +147,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Only merge existing output (Python equivalent: hydroswift.merge_only(...))",
     )
+    download.add_argument(
+        "--swot-merge",
+        dest="swot_merge",
+        action="store_true",
+        help=(
+            "Build SWOT-ready merged GeoPackage from existing HydroSwift output. "
+            "Reads cwc/ and wris/ GPKGs under --output-dir, enriches with station metadata, "
+            "and writes a unified wris_merged.gpkg (Python equivalent: hydroswift.swot_merge(...))"
+        ),
+    )
+    download.add_argument(
+        "--swot-output",
+        dest="swot_output",
+        default=None,
+        help="Destination GeoPackage for --swot-merge (default: <output-dir>/wris_merged.gpkg)",
+    )
     download.add_argument("--delay", type=float, default=0.25, help="Delay between WRIS API requests (seconds)")
     download.add_argument("--start-date", default="1950-01-01", help="Start date (YYYY-MM-DD)")
     download.add_argument("--end-date", default=time.strftime("%Y-%m-%d"), help="End date (YYYY-MM-DD)")
@@ -158,6 +200,9 @@ def build_parser() -> argparse.ArgumentParser:
     output.add_argument("--format", choices=["csv", "xlsx"], default="csv", help="Output file format")
 
     misc = parser.add_argument_group("Misc")
+    misc.add_argument(
+        "--gui", action="store_true", help="Launch the HydroSwift Graphical User Interface (Web-based)"
+    )
     misc.add_argument("--quiet", action="store_true", help="Suppress console output")
     misc.add_argument("--list", action="store_true", help="List available WRIS basins and CWC station count")
     misc.add_argument("--cite", action="store_true", help="Show citation information")

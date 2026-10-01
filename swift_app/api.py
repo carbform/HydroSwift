@@ -33,6 +33,8 @@ from .cwc import (
     get_cwc_station_metadata,
     repopulate_cwc_metadata_from_name_code,
 )
+from .swot_merge import build_swot_gpkg
+from .nwdp import _NwdpNamespace
 
 
 # ---------------------------------------------------------
@@ -58,8 +60,9 @@ Unified table workflow:
     hydroswift.fetch(table, ...)           # Download from WRIS/CWC station/basin tables
 
 Post-processing helpers:
-    hydroswift.merge_only(...)
-    hydroswift.plot_only(...)
+    hydroswift.merge_only(...)             # Merge station files into per-variable GPKGs
+    hydroswift.plot_only(...)              # Generate hydrograph plots
+    hydroswift.swot_merge(...)             # Build SWOT-ready merged GeoPackage (wris_merged.gpkg)
 
 Utilities:
     hydroswift.help()                           # this Python API help menu
@@ -1432,6 +1435,7 @@ class _CwcNamespace:
 
 wris = _WrisNamespace()
 cwc_ns = _CwcNamespace()
+nwdp = _NwdpNamespace()
 
 
 # ============================================================
@@ -1458,8 +1462,8 @@ def fetch(
     ----------
         stations : pandas.DataFrame
                 HydroSwift table (typically from ``hydroswift.wris.stations()``,
-                ``hydroswift.cwc.stations()``, ``hydroswift.wris.basins(variable=...)`` or
-                ``hydroswift.cwc.basins()``).
+                ``hydroswift.cwc.stations()``, ``hydroswift.wris.basins(variable=...)``,
+                ``hydroswift.cwc.basins()``, or ``hydroswift.nwdp.datasets()``).
 
                 - WRIS station tables include ``station_code`` and optionally
                     per-row ``basin``/``variable`` columns.
@@ -1500,7 +1504,9 @@ def fetch(
     source = stations.attrs.get("source") or stations.attrs.get("fetch_source")
     table_type = str(stations.attrs.get("type", "")).lower().strip()
     if not source:
-        if "station_code" in stations.columns:
+        if "resource_id" in stations.columns:
+            source = "nwdp"
+        elif "station_code" in stations.columns:
             source = "wris"
         elif "variable" in stations.columns:
             source = "wris"
@@ -1513,10 +1519,26 @@ def fetch(
         else:
             raise ValueError(
                 "Unable to infer data source from stations table. "
-                "Expected 'station_code' (WRIS) or 'code' (CWC) column."
+                "Expected 'resource_id' (NWDP), 'station_code' (WRIS) or 'code' (CWC) column."
             )
 
     source = str(source).lower().strip()
+    if source == "nwdp":
+        from .nwdp import nwdp_download
+        res_dfs = []
+        for _, row in stations.iterrows():
+            rid = row.get("resource_id")
+            if not pd.isna(rid):
+                res_name = row.get("dataset_title", rid) if "dataset_title" in row else None
+                org_name = row.get("org_id", "unknown_state") if "org_id" in row else None
+                
+                df = nwdp_download(resource_id=rid, output_dir=output_dir, format=format, quiet=quiet, res_name=res_name, org_name=org_name)
+                if df is not None:
+                    res_dfs.append(df)
+
+        if res_dfs:
+            return pd.concat(res_dfs, ignore_index=True)
+        return None
     if source == "wris":
         has_station_codes = "station_code" in stations.columns
         has_basin_col = "basin" in stations.columns
@@ -2253,3 +2275,62 @@ def coffee():
         "coffee and spirituous liqueurs. - Charles Darwin"
     )
     return None
+
+
+# ---------------------------------------------------------
+# SWOT merge — unified download + ingestion pipeline
+# ---------------------------------------------------------
+
+def swot_merge(
+    output_dir="output",
+    output_path=None,
+    hydroswift_root=None,
+    overwrite: bool = False,
+    layer: str = "wris_merged",
+):
+    """
+    Build a SWOT-ready merged GeoPackage from HydroSwift output.
+
+    After running ``hydroswift.wris.download(...)`` and
+    ``hydroswift.cwc.download(...)`` (or the CLI equivalents), call
+    this function to merge all station GPKGs into a single file conforming
+    to the SWOT validation pipeline schema.
+
+    Parameters
+    ----------
+    output_dir : str or Path
+        Root of the HydroSwift output tree (same as ``--output-dir`` CLI arg).
+        Must contain ``cwc/`` and/or ``wris/`` subdirectories.
+    output_path : str or Path, optional
+        Destination GeoPackage. Defaults to ``<output_dir>/wris_merged.gpkg``.
+    hydroswift_root : str or Path, optional
+        Root of the HydroSwift repo (auto-detected when omitted).
+    overwrite : bool
+        Overwrite the output file if it already exists.
+    layer : str
+        GeoPackage layer name (default: ``'wris_merged'``).
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        Merged GeoDataFrame with columns:
+        station_code, station_name, time, wse, discharge,
+        lat, lon, rl, depth, basin, tributary, source_folder, data_type
+        + geometry (EPSG:4326).
+
+    Examples
+    --------
+    >>> import hydroswift
+    >>> # 1. Download data (WRIS + CWC)
+    >>> hydroswift.wris.download("Godavari", ["water_level", "discharge"], merge=True)
+    >>> hydroswift.cwc.download(basin=["Godavari", "Krishna"], merge=True)
+    >>> # 2. Build SWOT-ready GeoPackage
+    >>> gdf = hydroswift.swot_merge(output_dir="output", overwrite=True)
+    """
+    return build_swot_gpkg(
+        output_dir=output_dir,
+        output_path=output_path,
+        hydroswift_root=hydroswift_root,
+        overwrite=overwrite,
+        layer=layer,
+    )

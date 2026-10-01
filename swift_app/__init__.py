@@ -20,6 +20,7 @@ VERSION_FULL = f"{VERSION} — {__codename__}"
 from .api import (
     wris,
     cwc_ns as cwc,
+    nwdp,
     help,
     cli_help,
     merge_only,
@@ -27,6 +28,7 @@ from .api import (
     fetch,
     cite,
     coffee,
+    swot_merge,
 )
 from .base_client import BaseHydrologyClient
 

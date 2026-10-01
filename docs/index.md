@@ -2,7 +2,7 @@
 
 **Fast, unified workflows for hydrological data.**
 
-HydroSwift is a Python toolkit for integrating, processing, and visualizing hydrological datasets at basin scale. It automates retrieval from [India-WRIS](https://indiawris.gov.in/) and the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/) while preserving reproducible CLI and notebook workflows.
+HydroSwift is a Python toolkit for integrating, processing, and visualizing hydrological datasets at basin scale. It automates retrieval from [India-WRIS](https://nwic.in/wris/#/timeseriesdata) and the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/) while preserving reproducible CLI and notebook workflows.
 
 ## Supported data sources
 
