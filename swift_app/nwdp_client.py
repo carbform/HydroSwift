@@ -39,13 +39,21 @@ class NwdpClient:
             print(f"Request failed: {e}")
         return []
 
-    def search_datasets(self, query: str = None, org: str = None, group: str = None, limit: int = 1000) -> list[dict]:
+    def search_datasets(self, query: str = None, org: str | list[str] = None, group: str | list[str] = None, limit: int = 1000) -> list[dict]:
         results = []
         fq = []
+        
         if org:
-            fq.append(f"organization:{org}")
+            if isinstance(org, str):
+                org = [org]
+            org_queries = [f"organization:{o}" for o in org]
+            fq.append("(" + " OR ".join(org_queries) + ")")
+            
         if group:
-            fq.append(f"groups:{group}")
+            if isinstance(group, str):
+                group = [group]
+            group_queries = [f"groups:{g}" for g in group]
+            fq.append("(" + " OR ".join(group_queries) + ")")
         
         params = {
             "rows": limit

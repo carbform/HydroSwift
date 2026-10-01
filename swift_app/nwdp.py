@@ -44,25 +44,34 @@ def nwdp_datasets(query: str = None, org: str = None, group: str = None):
     """
     client = NwdpClient()
     
-    # Try resolving org title to name
+    # Try resolving org title to name (fuzzy match)
     if org:
         all_orgs = client.get_organizations()
-        org_name = org
+        matched_orgs = []
         for o in all_orgs:
-            if o.get("title", "").lower() == org.lower() or o.get("name", "").lower() == org.lower():
-                org_name = o.get("name")
-                break
-        org = org_name
+            title = o.get("title", "").lower()
+            name = o.get("name", "").lower()
+            query_lower = org.lower()
+            if query_lower in title or query_lower in name:
+                matched_orgs.append(o.get("name"))
         
-    # Try resolving group title to name
+        if matched_orgs:
+            org = matched_orgs  # Pass list of matched org names
+        # if not matched, we just pass the original string
+        
+    # Try resolving group title to name (fuzzy match)
     if group:
         all_groups = client.get_groups()
-        group_name = group
+        matched_groups = []
         for g in all_groups:
-            if g.get("title", "").lower() == group.lower() or g.get("name", "").lower() == group.lower():
-                group_name = g.get("name")
-                break
-        group = group_name
+            title = g.get("title", "").lower()
+            name = g.get("name", "").lower()
+            query_lower = group.lower()
+            if query_lower in title or query_lower in name:
+                matched_groups.append(g.get("name"))
+                
+        if matched_groups:
+            group = matched_groups
 
     results = client.search_datasets(query=query, org=org, group=group)
     df = pd.DataFrame(results)
