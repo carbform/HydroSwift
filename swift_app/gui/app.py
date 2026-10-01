@@ -28,6 +28,13 @@ def run_gui():
     app.setApplicationName("HydroSwift")
     app.setApplicationVersion("1.0.0")
     
+    # Apply modern dark theme if available
+    try:
+        import qdarkstyle
+        app.setStyleSheet(qdarkstyle.load_stylesheet(qt_api='pyqt5'))
+    except ImportError:
+        pass
+        
     window = HydroSwiftGUI()
     window.show()
     

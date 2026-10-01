@@ -958,3 +958,171 @@ class ResultsViewerPanel(QWidget):
             )
         except Exception as e:
             self.log_message.emit(f"Error exporting: {str(e)}", "error")
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QGroupBox
+)
+from PyQt5.QtCore import pyqtSignal, Qt, QThread
+from PyQt5.QtGui import QFont
+from pathlib import Path
+import pandas as pd
+
+class NWDPDiscoveryPanel(QWidget):
+    """Panel for NWDP dataset discovery and download."""
+    
+    status_changed = pyqtSignal(str)
+    log_message = pyqtSignal(str, str)
+    download_completed = pyqtSignal(dict)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.output_dir = Path("output")
+        self.datasets_df = None
+        self.worker_thread = None
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(15, 15, 15, 15)
+        self.setLayout(layout)
+        
+        # Title
+        title = QLabel("NWDP (National Water Data Portal)")
+        title_font = QFont()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        layout.addWidget(title)
+        
+        # Search Box
+        search_group = QGroupBox("Dataset Search")
+        search_layout = QHBoxLayout()
+        
+        self.org_input = QLineEdit()
+        self.org_input.setPlaceholderText("State or Organization (e.g. Karnataka GW)")
+        search_layout.addWidget(QLabel("State:"))
+        search_layout.addWidget(self.org_input)
+        
+        self.query_input = QLineEdit()
+        self.query_input.setPlaceholderText("Keywords (e.g. Ground Water)")
+        search_layout.addWidget(QLabel("Query:"))
+        search_layout.addWidget(self.query_input)
+        
+        self.search_btn = QPushButton("🔍 Search Datasets")
+        self.search_btn.clicked.connect(self._search_datasets)
+        search_layout.addWidget(self.search_btn)
+        
+        search_group.setLayout(search_layout)
+        layout.addWidget(search_group)
+        
+        # Table
+        layout.addWidget(QLabel("Discovered Datasets:"))
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Dataset Title", "Organization", "Format", "Resource ID"])
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.MultiSelection)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        layout.addWidget(self.table)
+        
+        # Download Controls
+        dl_layout = QHBoxLayout()
+        self.dl_btn = QPushButton("⬇️ Download Selected Datasets")
+        self.dl_btn.clicked.connect(self._download_selected)
+        self.dl_btn.setEnabled(False)
+        self.dl_btn.setMinimumHeight(40)
+        dl_layout.addWidget(self.dl_btn)
+        dl_layout.addStretch()
+        layout.addLayout(dl_layout)
+        
+    def _search_datasets(self):
+        from swift_app.nwdp import nwdp_datasets
+        
+        org = self.org_input.text().strip()
+        query = self.query_input.text().strip()
+        
+        if not org and not query:
+            self.log_message.emit("Please enter a state or search query.", "WARNING")
+            return
+            
+        self.status_changed.emit("Searching NWDP datasets...")
+        self.search_btn.setEnabled(False)
+        self.log_message.emit(f"Searching NWDP for State='{org}', Query='{query}'", "INFO")
+        
+        try:
+            self.datasets_df = nwdp_datasets(query=query if query else None, org=org if org else None)
+            
+            self.table.setRowCount(0)
+            if self.datasets_df is None or self.datasets_df.empty:
+                self.log_message.emit("No datasets found matching criteria.", "WARNING")
+                self.dl_btn.setEnabled(False)
+            else:
+                self.table.setRowCount(len(self.datasets_df))
+                for i, row in self.datasets_df.iterrows():
+                    self.table.setItem(i, 0, QTableWidgetItem(str(row.get("dataset_title", ""))))
+                    self.table.setItem(i, 1, QTableWidgetItem(str(row.get("organization", ""))))
+                    self.table.setItem(i, 2, QTableWidgetItem(str(row.get("format", ""))))
+                    self.table.setItem(i, 3, QTableWidgetItem(str(row.get("resource_id", ""))))
+                self.dl_btn.setEnabled(True)
+                self.log_message.emit(f"Found {len(self.datasets_df)} datasets.", "SUCCESS")
+                
+            self.status_changed.emit("Search complete")
+        except Exception as e:
+            self.log_message.emit(f"Error searching NWDP: {str(e)}", "ERROR")
+            self.status_changed.emit("Search failed")
+            
+        self.search_btn.setEnabled(True)
+        
+    def _download_selected(self):
+        selected_rows = [item.row() for item in self.table.selectionModel().selectedRows()]
+        if not selected_rows:
+            self.log_message.emit("No datasets selected for download.", "WARNING")
+            return
+            
+        self.dl_btn.setEnabled(False)
+        
+        # Here we should technically use a WorkerThread, but for brevity we'll just run it synchronously or loop.
+        # It's better to use the existing WorkerThread class from panels.py!
+        
+        selected_rids = [self.table.item(r, 3).text() for r in selected_rows]
+        self.log_message.emit(f"Starting download of {len(selected_rids)} NWDP datasets...", "INFO")
+        
+        # Create a tiny thread
+        class NWDPDownloadThread(QThread):
+            progress = pyqtSignal(str)
+            finished = pyqtSignal(bool, str)
+            
+            def __init__(self, rids, out_dir):
+                super().__init__()
+                self.rids = rids
+                self.out_dir = out_dir
+                
+            def run(self):
+                try:
+                    from swift_app.nwdp import nwdp_download
+                    import time
+                    for rid in self.rids:
+                        self.progress.emit(f"Downloading {rid}...")
+                        nwdp_download(resource_id=rid, output_dir=str(self.out_dir), quiet=True)
+                    self.finished.emit(True, "All NWDP downloads completed successfully.")
+                except Exception as e:
+                    self.finished.emit(False, str(e))
+                    
+        self.worker_thread = NWDPDownloadThread(selected_rids, self.output_dir)
+        self.worker_thread.progress.connect(lambda msg: self.log_message.emit(msg, "INFO"))
+        
+        def on_finished(success, msg):
+            self.dl_btn.setEnabled(True)
+            if success:
+                self.log_message.emit(msg, "SUCCESS")
+                self.status_changed.emit("NWDP Downloads complete")
+                self.download_completed.emit({"source": "nwdp"})
+            else:
+                self.log_message.emit(f"Download failed: {msg}", "ERROR")
+                self.status_changed.emit("NWDP Download error")
+                
+        self.worker_thread.finished.connect(on_finished)
+        self.worker_thread.start()

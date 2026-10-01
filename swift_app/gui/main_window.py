@@ -27,6 +27,7 @@ from PyQt5.QtGui import QIcon, QFont
 from .panels import (
     WRISDiscoveryPanel,
     CWCDownloadPanel,
+    NWDPDiscoveryPanel,
     DownloadConfigPanel,
     ResultsViewerPanel,
 )
@@ -76,11 +77,15 @@ class HydroSwiftGUI(QMainWindow):
         self.tab_widget = QTabWidget()
         main_layout.addWidget(self.tab_widget)
         
-        # Tab 1: WRIS Discovery & Download
+        # Tab 1: NWDP Discovery & Download
+        self.nwdp_panel = NWDPDiscoveryPanel()
+        self.tab_widget.addTab(self.nwdp_panel, "🌐 NWDP Data")
+        
+        # Tab 2: WRIS Discovery & Download
         self.wris_panel = WRISDiscoveryPanel()
         self.tab_widget.addTab(self.wris_panel, "📊 WRIS Data")
         
-        # Tab 2: CWC Download
+        # Tab 3: CWC Download
         self.cwc_panel = CWCDownloadPanel()
         self.tab_widget.addTab(self.cwc_panel, "💧 CWC Stations")
         
@@ -165,17 +170,20 @@ class HydroSwiftGUI(QMainWindow):
         """Connect UI signals to slots."""
         
         # Wire panels to status updates
+        self.nwdp_panel.status_changed.connect(self._update_status)
         self.wris_panel.status_changed.connect(self._update_status)
         self.cwc_panel.status_changed.connect(self._update_status)
         self.config_panel.status_changed.connect(self._update_status)
         
         # Wire log messages
+        self.nwdp_panel.log_message.connect(self.logger_widget.append_log)
         self.wris_panel.log_message.connect(self.logger_widget.append_log)
         self.cwc_panel.log_message.connect(self.logger_widget.append_log)
         self.config_panel.log_message.connect(self.logger_widget.append_log)
         self.results_panel.log_message.connect(self.logger_widget.append_log)
         
         # Wire download completion
+        self.nwdp_panel.download_completed.connect(self._on_download_completed)
         self.wris_panel.download_completed.connect(self._on_download_completed)
 
     def _update_status(self, message: str) -> None:
