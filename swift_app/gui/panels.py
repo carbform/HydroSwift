@@ -1089,41 +1089,57 @@ class NWDPDiscoveryPanel(QWidget):
         # Here we should technically use a WorkerThread, but for brevity we'll just run it synchronously or loop.
         # It's better to use the existing WorkerThread class from panels.py!
         
-        selected_rids = [self.table.item(r, 3).text() for r in selected_rows]
-        self.log_message.emit(f"Starting download of {len(selected_rids)} NWDP datasets...", "INFO")
+        selected_items = [
+            (
+                self.table.item(r, 3).text(),  # rid
+                self.table.item(r, 0).text(),  # title
+                self.table.item(r, 1).text()   # org
+            )
+            for r in selected_rows
+        ]
+        
+        self.log_message.emit(f"Starting download of {len(selected_items)} NWDP datasets...", "INFO")
         
         # Create a tiny thread
         class NWDPDownloadThread(QThread):
             progress = pyqtSignal(str)
-            finished = pyqtSignal(bool, str)
+            log = pyqtSignal(str, str)
+            finished = pyqtSignal(bool, str, int)
             
-            def __init__(self, rids, out_dir):
+            def __init__(self, items, out_dir):
                 super().__init__()
-                self.rids = rids
+                self.items = items
                 self.out_dir = out_dir
                 
             def run(self):
                 try:
                     from swift_app.nwdp import nwdp_download
                     import time
-                    for rid in self.rids:
+                    saved_count = 0
+                    for rid, title, org in self.items:
                         self.progress.emit(f"Downloading {rid}...")
-                        nwdp_download(resource_id=rid, output_dir=str(self.out_dir), quiet=True)
-                    self.finished.emit(True, "All NWDP downloads completed successfully.")
+                        df = nwdp_download(resource_id=rid, res_name=title, org_name=org, output_dir=str(self.out_dir), quiet=True)
+                        if df is not None and not df.empty:
+                            saved_count += 1
+                        else:
+                            self.log.emit(f"Dataset {title} is empty or inaccessible.", "WARNING")
+                            
+                    self.finished.emit(True, "NWDP downloads completed.", saved_count)
                 except Exception as e:
-                    self.finished.emit(False, str(e))
+                    self.finished.emit(False, str(e), 0)
                     
-        self.worker_thread = NWDPDownloadThread(selected_rids, self.output_dir)
+        self.worker_thread = NWDPDownloadThread(selected_items, self.output_dir)
         self.worker_thread.progress.connect(lambda msg: self.log_message.emit(msg, "INFO"))
+        self.worker_thread.log.connect(lambda msg, level: self.log_message.emit(msg, level))
         
-        def on_finished(success, msg):
+        def on_finished(success, msg, saved_count):
             self.dl_btn.setEnabled(True)
             if success:
                 self.log_message.emit(msg, "SUCCESS")
                 self.status_changed.emit("NWDP Downloads complete")
                 self.download_completed.emit({
                     "source": "nwdp",
-                    "files_saved": len(selected_rids),
+                    "files_saved": saved_count,
                     "output_dir": str(self.output_dir)
                 })
             else:
