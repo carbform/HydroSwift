@@ -138,7 +138,7 @@ def test_download_station_writes_wse_and_discharge_columns(monkeypatch, tmp_path
     result = download_station(station, str(tmp_path), args)
     assert result is True
 
-    out_files = list(tmp_path.glob("040-CDJAPR_*.csv"))
+    out_files = list(tmp_path.glob("CWC_*.csv"))
     assert out_files, "Expected station CSV file to be written"
 
     import pandas as pd
@@ -196,7 +196,7 @@ def test_download_station_estimates_discharge_from_rc_when_api_missing(monkeypat
     result = download_station(station, str(tmp_path), args)
     assert result is True
 
-    out_files = list(tmp_path.glob("040-CDJAPR_*.csv"))
+    out_files = list(tmp_path.glob("CWC_*.csv"))
     assert out_files
 
     import pandas as pd
@@ -247,7 +247,7 @@ def test_download_station_skips_rc_when_disabled(monkeypatch, tmp_path):
 
     result = download_station(station, str(tmp_path), args)
     assert result is True
-    out_files = list(tmp_path.glob("040-CDJAPR_*.csv"))
+    out_files = list(tmp_path.glob("CWC_*.csv"))
     assert out_files
 
     import pandas as pd
