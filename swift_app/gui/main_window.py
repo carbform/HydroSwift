@@ -27,7 +27,7 @@ from PyQt5.QtGui import QIcon, QFont
 from .panels import (
     WRISDiscoveryPanel,
     CWCDownloadPanel,
-    NWDPDiscoveryPanel,
+    UnifiedDiscoveryPanel,
     DownloadConfigPanel,
     ResultsViewerPanel,
 )
@@ -77,17 +77,17 @@ class HydroSwiftGUI(QMainWindow):
         self.tab_widget = QTabWidget()
         main_layout.addWidget(self.tab_widget)
         
-        # Tab 1: NWDP Discovery & Download
-        self.nwdp_panel = NWDPDiscoveryPanel()
-        self.tab_widget.addTab(self.nwdp_panel, "🌐 NWDP Data")
+        # Tab 1: Unified Discovery & Download
+        self.unified_panel = UnifiedDiscoveryPanel()
+        self.tab_widget.addTab(self.unified_panel, "🌐 Unified Search")
         
         # Tab 2: WRIS Discovery & Download
         self.wris_panel = WRISDiscoveryPanel()
-        self.tab_widget.addTab(self.wris_panel, "📊 WRIS Data")
+        self.tab_widget.addTab(self.wris_panel, "📊 Expert: WRIS")
         
         # Tab 3: CWC Download
         self.cwc_panel = CWCDownloadPanel()
-        self.tab_widget.addTab(self.cwc_panel, "💧 CWC Stations")
+        self.tab_widget.addTab(self.cwc_panel, "💧 Expert: CWC")
         
         # Tab 3: Download Configuration
         self.config_panel = DownloadConfigPanel()
@@ -170,20 +170,20 @@ class HydroSwiftGUI(QMainWindow):
         """Connect UI signals to slots."""
         
         # Wire panels to status updates
-        self.nwdp_panel.status_changed.connect(self._update_status)
+        self.unified_panel.status_changed.connect(self._update_status)
         self.wris_panel.status_changed.connect(self._update_status)
         self.cwc_panel.status_changed.connect(self._update_status)
         self.config_panel.status_changed.connect(self._update_status)
         
         # Wire log messages
-        self.nwdp_panel.log_message.connect(self.logger_widget.append_log)
+        self.unified_panel.log_message.connect(self.logger_widget.append_log)
         self.wris_panel.log_message.connect(self.logger_widget.append_log)
         self.cwc_panel.log_message.connect(self.logger_widget.append_log)
         self.config_panel.log_message.connect(self.logger_widget.append_log)
         self.results_panel.log_message.connect(self.logger_widget.append_log)
         
         # Wire download completion
-        self.nwdp_panel.download_completed.connect(self._on_download_completed)
+        self.unified_panel.download_completed.connect(self._on_download_completed)
         self.wris_panel.download_completed.connect(self._on_download_completed)
         self.cwc_panel.download_completed.connect(self._on_download_completed)
 

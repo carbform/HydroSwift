@@ -1501,6 +1501,73 @@ def fetch(
             "hydroswift.wris.basins(...), or hydroswift.cwc.basins(...)."
         )
 
+    if isinstance(stations, str):
+        # Allow legacy shorthand fetch("karnataka")
+        stations = search(location=stations)
+
+    if not isinstance(stations, pd.DataFrame):
+        raise TypeError(
+            "stations must be a DataFrame. "
+            "Use hydroswift.search(query, location) or specific portal helpers."
+        )
+
+    # -------------------------------------------------------------
+    # Handle the unified search results dataframe
+    # -------------------------------------------------------------
+    if "Source" in stations.columns and "Title" in stations.columns and "ID" in stations.columns:
+        nwdp_rows = stations[stations["Source"] == "NWDP"]
+        cwc_rows = stations[stations["Source"] == "CWC"]
+        
+        results = []
+        import warnings
+        import os
+        
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        if not nwdp_rows.empty:
+            from .nwdp import nwdp_download
+            for _, row in nwdp_rows.iterrows():
+                try:
+                    df = nwdp_download(
+                        resource_id=row["ID"], 
+                        res_name=row["Title"], 
+                        org_name=row["Location"], 
+                        output_dir=output_dir, 
+                        format=format,
+                        quiet=quiet
+                    )
+                    if df is not None: results.append(df)
+                except Exception as e:
+                    warnings.warn(f"NWDP download failed for {row['ID']}: {e}")
+                    
+        if not cwc_rows.empty:
+            from .cwc import download_station
+            import os
+            from collections import namedtuple
+            Args = namedtuple('Args', ['format', 'overwrite', 'start_date', 'end_date', 'cwc_var', 'cwc_rc_discharge'])
+            args = Args(format=format, overwrite=overwrite, start_date=start_date, end_date=end_date, cwc_var=None, cwc_rc_discharge=False)
+            
+            for _, row in cwc_rows.iterrows():
+                try:
+                    station_dict = {
+                        "code": row["ID"],
+                        "name": row["Title"],
+                        "basin": row["Location"].split(",")[0].strip() if "," in row["Location"] else row["Location"],
+                        "lat": row.get("lat"),
+                        "lon": row.get("lon")
+                    }
+                    download_station(station_dict, output_dir, args)
+                except Exception as e:
+                    warnings.warn(f"CWC download failed for {row['ID']}: {e}")
+                    
+        if plot:
+            plot_only(input_dir=output_dir, mode="cwc")
+        return None
+
+    # -------------------------------------------------------------
+    # Legacy source inference for direct portal helpers
+    # -------------------------------------------------------------
     source = stations.attrs.get("source") or stations.attrs.get("fetch_source")
     table_type = str(stations.attrs.get("type", "")).lower().strip()
     if not source:
@@ -1518,8 +1585,7 @@ def fetch(
             source = "cwc"
         else:
             raise ValueError(
-                "Unable to infer data source from stations table. "
-                "Expected 'resource_id' (NWDP), 'station_code' (WRIS) or 'code' (CWC) column."
+                "Unable to infer data source from stations table."
             )
 
     source = str(source).lower().strip()
@@ -2334,3 +2400,86 @@ def swot_merge(
         overwrite=overwrite,
         layer=layer,
     )
+import pandas as pd
+
+def search(query: str = None, location: str = None) -> pd.DataFrame:
+    """
+    Intelligent unified discovery across NWDP and CWC.
+    
+    Parameters
+    ----------
+    query : str, optional
+        Variable or keyword to search for (e.g., "Rainfall", "Discharge").
+    location : str, optional
+        State, Basin, District, or Agency name to filter by (e.g., "Karnataka", "Godavari").
+        
+    Returns
+    -------
+    pd.DataFrame
+        Unified table of datasets and stations matching the criteria.
+    """
+    results = []
+    
+    # 1. Search NWDP
+    try:
+        from swift_app.nwdp import nwdp_datasets
+        nwdp_df = nwdp_datasets(query=query, org=location)
+        if nwdp_df is not None and not nwdp_df.empty:
+            for _, row in nwdp_df.iterrows():
+                results.append({
+                    "Source": "NWDP",
+                    "Title": str(row.get("dataset_title", "")),
+                    "Location": str(row.get("organization", "")),
+                    "Variable": str(row.get("variable", "")),
+                    "Resolution": str(row.get("resolution", "")),
+                    "ID": str(row.get("resource_id", "")),
+                    "lat": None,
+                    "lon": None
+                })
+    except Exception as e:
+        import warnings
+        warnings.warn(f"NWDP search failed: {e}")
+        
+    # 2. Search CWC
+    try:
+        from swift_app.cwc import load_station_table
+        cwc_df = load_station_table(refresh=False)
+        
+        if location:
+            loc_lower = str(location).lower()
+            mask = (
+                cwc_df["basin"].astype(str).str.lower().str.contains(loc_lower, na=False) |
+                cwc_df["state"].astype(str).str.lower().str.contains(loc_lower, na=False) |
+                cwc_df["district"].astype(str).str.lower().str.contains(loc_lower, na=False)
+            )
+            cwc_df = cwc_df[mask]
+            
+        if query:
+            q_lower = str(query).lower()
+            if any(k in q_lower for k in ["rain", "wind", "temp", "solar", "humidity"]):
+                cwc_df = pd.DataFrame() # CWC FFS only has Water Level and Discharge
+            
+        if not cwc_df.empty:
+            for _, row in cwc_df.iterrows():
+                results.append({
+                    "Source": "CWC",
+                    "Title": str(row.get("name", "")),
+                    "Location": f"{row.get('basin', '')}, {row.get('state', '')}",
+                    "Variable": "Water Level / Discharge",
+                    "Resolution": "Hourly",
+                    "ID": str(row.get("code", "")),
+                    "lat": row.get("lat"),
+                    "lon": row.get("lon")
+                })
+    except Exception as e:
+        import warnings
+        warnings.warn(f"CWC search failed: {e}")
+        
+    df = pd.DataFrame(results)
+    if not df.empty:
+        df = df[["Source", "Title", "Location", "Variable", "Resolution", "ID", "lat", "lon"]]
+    else:
+        df = pd.DataFrame(columns=["Source", "Title", "Location", "Variable", "Resolution", "ID", "lat", "lon"])
+        
+    df.attrs["swift_type"] = "search_results"
+    return df

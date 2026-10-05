@@ -21,6 +21,7 @@ from .api import (
     wris,
     cwc_ns as cwc,
     nwdp,
+    search,
     help,
     cli_help,
     merge_only,

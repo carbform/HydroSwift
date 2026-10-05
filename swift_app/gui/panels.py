@@ -969,8 +969,8 @@ from PyQt5.QtGui import QFont
 from pathlib import Path
 import pandas as pd
 
-class NWDPDiscoveryPanel(QWidget):
-    """Panel for NWDP dataset discovery and download."""
+class UnifiedDiscoveryPanel(QWidget):
+    """Panel for unified intelligent search across NWDP and CWC."""
     
     status_changed = pyqtSignal(str)
     log_message = pyqtSignal(str, str)
@@ -990,7 +990,7 @@ class NWDPDiscoveryPanel(QWidget):
         self.setLayout(layout)
         
         # Title
-        title = QLabel("NWDP (National Water Data Portal)")
+        title = QLabel("Unified Intelligent Search")
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
@@ -998,17 +998,17 @@ class NWDPDiscoveryPanel(QWidget):
         layout.addWidget(title)
         
         # Search Box
-        search_group = QGroupBox("Dataset Search")
+        search_group = QGroupBox("Find Hydrological Data")
         search_layout = QHBoxLayout()
         
         self.org_input = QLineEdit()
-        self.org_input.setPlaceholderText("State or Organization (e.g. Karnataka GW)")
-        search_layout.addWidget(QLabel("State:"))
+        self.org_input.setPlaceholderText("Location, State, or Basin (e.g. Karnataka, Godavari)")
+        search_layout.addWidget(QLabel("Location:"))
         search_layout.addWidget(self.org_input)
         
         self.query_input = QLineEdit()
-        self.query_input.setPlaceholderText("Keywords (e.g. Ground Water)")
-        search_layout.addWidget(QLabel("Query:"))
+        self.query_input.setPlaceholderText("Variable (e.g. Rainfall, Water Level)")
+        search_layout.addWidget(QLabel("Variable:"))
         search_layout.addWidget(self.query_input)
         
         self.search_btn = QPushButton("🔍 Search Datasets")
@@ -1019,15 +1019,15 @@ class NWDPDiscoveryPanel(QWidget):
         layout.addWidget(search_group)
         
         # Table
-        layout.addWidget(QLabel("Discovered Datasets:"))
+        layout.addWidget(QLabel("Discovered Datasets/Stations:"))
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Dataset Title", "Organization", "Variable", "Resolution", "Resource ID"])
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["Source", "Title/Station", "Location", "Variable", "Resolution", "ID"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.MultiSelection)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         layout.addWidget(self.table)
         
         # Download Controls
@@ -1041,21 +1041,21 @@ class NWDPDiscoveryPanel(QWidget):
         layout.addLayout(dl_layout)
         
     def _search_datasets(self):
-        from swift_app.nwdp import nwdp_datasets
+        import hydroswift
         
         org = self.org_input.text().strip()
         query = self.query_input.text().strip()
         
         if not org and not query:
-            self.log_message.emit("Please enter a state or search query.", "WARNING")
+            self.log_message.emit("Please enter a location or search query.", "WARNING")
             return
             
-        self.status_changed.emit("Searching NWDP datasets...")
+        self.status_changed.emit("Searching datasets...")
         self.search_btn.setEnabled(False)
-        self.log_message.emit(f"Searching NWDP for State='{org}', Query='{query}'", "INFO")
+        self.log_message.emit(f"Searching for Location='{org}', Variable='{query}'", "INFO")
         
         try:
-            self.datasets_df = nwdp_datasets(query=query if query else None, org=org if org else None)
+            self.datasets_df = hydroswift.search(query=query if query else None, location=org if org else None)
             
             self.table.setRowCount(0)
             if self.datasets_df is None or self.datasets_df.empty:
@@ -1064,17 +1064,18 @@ class NWDPDiscoveryPanel(QWidget):
             else:
                 self.table.setRowCount(len(self.datasets_df))
                 for i, row in self.datasets_df.iterrows():
-                    self.table.setItem(i, 0, QTableWidgetItem(str(row.get("dataset_title", ""))))
-                    self.table.setItem(i, 1, QTableWidgetItem(str(row.get("organization", ""))))
-                    self.table.setItem(i, 2, QTableWidgetItem(str(row.get("variable", ""))))
-                    self.table.setItem(i, 3, QTableWidgetItem(str(row.get("resolution", ""))))
-                    self.table.setItem(i, 4, QTableWidgetItem(str(row.get("resource_id", ""))))
+                    self.table.setItem(i, 0, QTableWidgetItem(str(row.get("Source", ""))))
+                    self.table.setItem(i, 1, QTableWidgetItem(str(row.get("Title", ""))))
+                    self.table.setItem(i, 2, QTableWidgetItem(str(row.get("Location", ""))))
+                    self.table.setItem(i, 3, QTableWidgetItem(str(row.get("Variable", ""))))
+                    self.table.setItem(i, 4, QTableWidgetItem(str(row.get("Resolution", ""))))
+                    self.table.setItem(i, 5, QTableWidgetItem(str(row.get("ID", ""))))
                 self.dl_btn.setEnabled(True)
                 self.log_message.emit(f"Found {len(self.datasets_df)} datasets.", "SUCCESS")
                 
             self.status_changed.emit("Search complete")
         except Exception as e:
-            self.log_message.emit(f"Error searching NWDP: {str(e)}", "ERROR")
+            self.log_message.emit(f"Error searching: {str(e)}", "ERROR")
             self.status_changed.emit("Search failed")
             
         self.search_btn.setEnabled(True)
@@ -1086,50 +1087,31 @@ class NWDPDiscoveryPanel(QWidget):
             return
             
         self.dl_btn.setEnabled(False)
+        selected_df = self.datasets_df.iloc[selected_rows].copy()
         
-        # Here we should technically use a WorkerThread, but for brevity we'll just run it synchronously or loop.
-        # It's better to use the existing WorkerThread class from panels.py!
-        
-        selected_items = [
-            (
-                self.table.item(r, 4).text(),  # rid
-                self.table.item(r, 0).text(),  # title
-                self.table.item(r, 1).text()   # org
-            )
-            for r in selected_rows
-        ]
-        
-        self.log_message.emit(f"Starting download of {len(selected_items)} NWDP datasets...", "INFO")
+        self.log_message.emit(f"Starting download of {len(selected_rows)} datasets...", "INFO")
         
         # Create a tiny thread
-        class NWDPDownloadThread(QThread):
+        class UnifiedDownloadThread(QThread):
             progress = pyqtSignal(str)
             log = pyqtSignal(str, str)
             finished = pyqtSignal(bool, str, int)
             
-            def __init__(self, items, out_dir):
+            def __init__(self, df, out_dir):
                 super().__init__()
-                self.items = items
+                self.df = df
                 self.out_dir = out_dir
                 
             def run(self):
                 try:
-                    from swift_app.nwdp import nwdp_download
-                    import time
-                    saved_count = 0
-                    for rid, title, org in self.items:
-                        self.progress.emit(f"Downloading {rid}...")
-                        df = nwdp_download(resource_id=rid, res_name=title, org_name=org, output_dir=str(self.out_dir), quiet=True)
-                        if df is not None and not df.empty:
-                            saved_count += 1
-                        else:
-                            self.log.emit(f"Dataset {title} is empty or inaccessible.", "WARNING")
-                            
-                    self.finished.emit(True, "NWDP downloads completed.", saved_count)
+                    import hydroswift
+                    # fetch natively prints warnings if downloads fail
+                    hydroswift.fetch(self.df, output_dir=str(self.out_dir), quiet=True)
+                    self.finished.emit(True, "Downloads completed successfully.", len(self.df))
                 except Exception as e:
                     self.finished.emit(False, str(e), 0)
                     
-        self.worker_thread = NWDPDownloadThread(selected_items, self.output_dir)
+        self.worker_thread = UnifiedDownloadThread(selected_df, self.output_dir)
         self.worker_thread.progress.connect(lambda msg: self.log_message.emit(msg, "INFO"))
         self.worker_thread.log.connect(lambda msg, level: self.log_message.emit(msg, level))
         
@@ -1137,9 +1119,9 @@ class NWDPDiscoveryPanel(QWidget):
             self.dl_btn.setEnabled(True)
             if success:
                 self.log_message.emit(msg, "SUCCESS")
-                self.status_changed.emit("NWDP Downloads complete")
+                self.status_changed.emit("Downloads complete")
                 self.download_completed.emit({
-                    "source": "nwdp",
+                    "source": "unified",
                     "files_saved": saved_count,
                     "output_dir": str(self.output_dir)
                 })

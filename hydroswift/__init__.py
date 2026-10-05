@@ -20,6 +20,7 @@ from .api import (  # noqa: E402
     wris,
     cwc_ns as cwc,
     nwdp,
+    search,
     help,
     cli_help,
     merge_only,
