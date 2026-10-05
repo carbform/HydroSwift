@@ -25,7 +25,6 @@ from PyQt5.QtCore import Qt, pyqtSignal, QThreadPool, QTimer
 from PyQt5.QtGui import QIcon, QFont
 
 from .panels import (
-    WRISDiscoveryPanel,
     CWCDownloadPanel,
     UnifiedDiscoveryPanel,
     DownloadConfigPanel,
@@ -80,10 +79,6 @@ class HydroSwiftGUI(QMainWindow):
         # Tab 1: Unified Discovery & Download
         self.unified_panel = UnifiedDiscoveryPanel()
         self.tab_widget.addTab(self.unified_panel, "🌐 Unified Search")
-        
-        # Tab 2: WRIS Discovery & Download
-        self.wris_panel = WRISDiscoveryPanel()
-        self.tab_widget.addTab(self.wris_panel, "📊 Expert: WRIS")
         
         # Tab 3: CWC Download
         self.cwc_panel = CWCDownloadPanel()
@@ -171,20 +166,17 @@ class HydroSwiftGUI(QMainWindow):
         
         # Wire panels to status updates
         self.unified_panel.status_changed.connect(self._update_status)
-        self.wris_panel.status_changed.connect(self._update_status)
         self.cwc_panel.status_changed.connect(self._update_status)
         self.config_panel.status_changed.connect(self._update_status)
         
         # Wire log messages
         self.unified_panel.log_message.connect(self.logger_widget.append_log)
-        self.wris_panel.log_message.connect(self.logger_widget.append_log)
         self.cwc_panel.log_message.connect(self.logger_widget.append_log)
         self.config_panel.log_message.connect(self.logger_widget.append_log)
         self.results_panel.log_message.connect(self.logger_widget.append_log)
         
         # Wire download completion
         self.unified_panel.download_completed.connect(self._on_download_completed)
-        self.wris_panel.download_completed.connect(self._on_download_completed)
         self.cwc_panel.download_completed.connect(self._on_download_completed)
 
     def _update_status(self, message: str) -> None:

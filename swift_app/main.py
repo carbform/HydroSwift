@@ -55,9 +55,7 @@ def main() -> int:
     from pathlib import Path
 
     from .cli import build_parser, DATASETS, selected_datasets, WRIS_BASINS
-    from .wris_client import WrisClient
     from .plot import run_plot_only
-    from .wris import run_wris_download
     from .cwc import run_cwc_download
     from .merge import merge_dataset_folder
     from .swot_merge import build_swot_gpkg
@@ -383,28 +381,32 @@ def main() -> int:
         return 0
 
     # ---------------------------------------------------------
-    # DEFAULT WRIS DOWNLOAD
+    # DEFAULT UNIFIED DOWNLOAD (Legacy WRIS arguments)
     # ---------------------------------------------------------
 
     if not args.basin:
-        raise SystemExit("Error: basin required unless using --cwc")
+        raise SystemExit("Error: location/basin required.")
 
-    client = WrisClient(delay=args.delay)
-
-    if not client.check_api():
-        raise SystemExit(1)
-
-    basin_code = client.get_basin_code(args.basin)
-
+    from .api import search, fetch
+    
+    # Map selected WRIS flags to a query word
     selected = selected_datasets(args)
-
-    if not selected:
+    queries = []
+    if selected:
+        for ds_code, folder in selected.items():
+            if folder == "water_level": queries.append("Water Level")
+            elif folder == "discharge": queries.append("Discharge")
+            elif folder == "rainfall": queries.append("Rainfall")
+            else: queries.append(folder)
+    else:
         raise SystemExit("No dataset selected")
-
-    run_wris_download(args, selected, client, basin_code)
-
-    if args.plot:
-        args.input_dir = str(Path(args.output_dir) / "wris" / args.basin.lower())
-        run_plot_only(args)
+        
+    for q in queries:
+        if not args.quiet: print(f"Searching for {q} in {args.basin}...")
+        df = search(query=q, location=args.basin)
+        if df is not None and not df.empty:
+            fetch(df, output_dir=args.output_dir, overwrite=args.overwrite, quiet=args.quiet, plot=args.plot)
+        else:
+            print(f"No results found for {q} in {args.basin}.")
 
     return 0

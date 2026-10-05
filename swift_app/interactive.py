@@ -68,19 +68,26 @@ def run_interactive(args):
         
         args.merge = prompt("Merge into GeoPackage? (y/n)", "y").lower() == "y"
         
-        from .wris import run_wris_download
-        print(f"\nStarting WRIS download for {WRIS_BASINS[basin_num]}...")
+        from .main import selected_datasets
+        selected = selected_datasets(args)
+        queries = []
+        for ds_code, folder in selected.items():
+            if folder == "water_level": queries.append("Water Level")
+            elif folder == "discharge": queries.append("Discharge")
+            elif folder == "rainfall": queries.append("Rainfall")
+            else: queries.append(folder)
+            
+        print(f"\nStarting WRIS download for {WRIS_BASINS[basin_num]} via Unified API...")
         
-        from .wris_client import WrisClient
-        client = WrisClient(delay=args.delay)
-        if not client.check_api():
-            return 1
-        basin_code = client.get_basin_code(WRIS_BASINS[basin_num])
-        
-        from .cli import DATASETS
-        selected = {k: v for k, v in DATASETS.items() if getattr(args, k, False)}
-        
-        return run_wris_download(args, selected, client, basin_code)
+        from .api import search, fetch
+        for q in queries:
+            df = search(query=q, location=WRIS_BASINS[basin_num])
+            if df is not None and not df.empty:
+                fetch(df, output_dir=args.output_dir, overwrite=args.overwrite, quiet=args.quiet)
+            else:
+                print(f"No results found for {q} in {WRIS_BASINS[basin_num]}.")
+                
+        return 0
         
     elif choice == "3":
         print("\n--- CWC Data Download ---")

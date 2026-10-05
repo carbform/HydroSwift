@@ -23,9 +23,7 @@ from types import SimpleNamespace
 import pandas as pd
 import time
 
-from .wris_client import WrisClient
 from .cli import DATASETS, WRIS_BASINS
-from .wris import run_wris_download, build_basin_structure, discover_stations
 from .merge import run_merge_only
 from .plot import run_plot_only
 from .cwc import (
@@ -459,7 +457,6 @@ def get_wris_data(
         # Best-effort only; never fail because of a progress message.
         pass
 
-    summary = run_wris_download(args, selected, client, basin_code)
 
     # Optionally generate plots only for datasets that had data in the
     # requested time period, so we do not plot stale files from earlier runs.
@@ -1031,230 +1028,60 @@ def cwc_stations(station=None, basin=None, river=None, state=None, refresh=False
 # ============================================================
 
 class _WrisNamespace:
-    """``swift.wris`` namespace for India-WRIS operations."""
-
+    """``hydroswift.wris`` namespace for legacy India-WRIS operations.
+    This has been merged into the unified NWDP/CWC search API.
+    """
+    
     @staticmethod
     def download(
         basin=None,
         variable=None,
         *,
-        station=None,
-        stations=None,
-        start_date="1950-01-01",
-        end_date=None,
         output_dir="output",
-        format="csv",
         overwrite=False,
-        merge=False,
         plot=False,
-        delay=0.25,
         quiet=False,
+        **kwargs
     ):
-        """Download WRIS time-series data.
-
-        Parameters
-        ----------
-        basin : str, int, or list, required
-            Basin name/number (or list of basin names/numbers).
-        variable : str or list[str]
-            Dataset variable(s) (``'discharge'``, ``'rainfall'``, etc.).
-        station : str or list[str], optional
-            Limit to specific station code(s).
-        stations : str or list[str], optional
-            Alias for ``station``.
-        start_date, end_date : str
-            ISO date strings.
-        output_dir : str
-            Root output directory.
-        format : ``'csv'`` | ``'xlsx'``
-        overwrite, merge, plot, quiet : bool
-        delay : float
-            Seconds between API requests.
-        """
-        if station is not None and stations is not None:
-            raise ValueError("Provide only one of 'station' or 'stations', not both.")
-
-        station_input = station if station is not None else stations
-
-        if isinstance(basin, pd.DataFrame) or isinstance(station_input, pd.DataFrame):
-            raise TypeError(
-                "swift.wris.download() accepts explicit basin/variable/station values only. "
-                "For WRIS station/basin tables, use swift.fetch(table, ...)."
-            )
-
-        # Expand basin='all' to the full WRIS basin list.
-        all_basins = _expand_basin_all(basin)
-        if all_basins is not None:
-            basin = all_basins
-
-        if basin is None:
-            raise ValueError(
-                "basin is required for swift.wris.download()."
-            )
-
+        """Legacy WRIS downloader. Routes to the new Unified API."""
+        import warnings
+        warnings.warn("hydroswift.wris is deprecated and merged with NWDP. Use unified hydroswift.search/fetch.", DeprecationWarning, stacklevel=2)
+        
         if variable is None:
-            raise ValueError(
-                "variable is required for swift.wris.download() when basin is "
-                "provided as a name/id."
-            )
-
-        return get_wris_data(
-            var=variable,
-            basin=basin,
-            station=station_input,
-            start_date=start_date,
-            end_date=end_date,
-            output_dir=output_dir,
-            format=format,
-            overwrite=overwrite,
-            merge=merge,
-            plot=plot,
-            delay=delay,
-            quiet=quiet,
-        )
-
-    @staticmethod
-    def stations(basin, variable, delay=0.25, state=None):
-        """List available WRIS stations for one or more basins/variables.
-
-        Parameters
-        ----------
-        basin : str, int, or list
-            Basin name(s) or number(s).
-        variable : str or list[str]
-            Dataset variable(s) (e.g. ``'discharge'``, ``'solar'``).
-        delay : float
-            Seconds between API requests.
-
-        Returns
-        -------
-        SwiftTable
-            Columns: ``station_code``, ``station_name``, ``latitude``,
-            ``longitude``, ``river``, ``basin``, ``variable``.
-        """
-        if state is not None and str(state).strip() != "":
-            raise ValueError(
-                "state filtering is currently only supported for hydroswift.cwc.stations(). "
-                "WRIS station discovery supports basin-level filtering only."
-            )
-        if variable is None:
-            raise ValueError(
-                "variable is required for hydroswift.wris.stations() "
-                "(for example: 'discharge' or 'solar')."
-            )
-        if isinstance(variable, str) and not variable.strip():
-            raise ValueError(
-                "variable is required for hydroswift.wris.stations() "
-                "(for example: 'discharge' or 'solar')."
-            )
-        if isinstance(variable, (list, tuple, set)) and not variable:
-            raise ValueError(
-                "variable is required for hydroswift.wris.stations() "
-                "(for example: 'discharge' or 'solar')."
-            )
-        # Expand basin='all' to the full WRIS basin list.
-        all_basins = _expand_basin_all(basin)
-        if all_basins is not None:
-            basin = all_basins
-        return wris_stations(basin=basin, var=variable, delay=delay)
-
-    @staticmethod
-    def variables():
-        """Return the supported WRIS variables as a table.
-
-        Returns
-        -------
-        SwiftTable
-            Columns: ``flag``, ``dataset_code``, ``folder``, ``canonical_name``,
-            ``aliases``.
-        """
-        canonical_by_flag = {
-            "q": "discharge",
-            "wl": "water_level",
-            "atm": "atm_pressure",
-            "rf": "rainfall",
-            "temp": "temperature",
-            "rh": "humidity",
-            "solar": "solar_radiation",
-            "sed": "sediment",
-            "gwl": "groundwater_level",
-        }
-        alias_map: dict[str, list[str]] = {}
-        for alias, flag in DATASET_ALIAS.items():
-            alias_map.setdefault(flag, []).append(alias)
-
-        records = []
-        for flag, (dataset_code, folder) in DATASETS.items():
-            aliases = sorted(set(alias_map.get(flag, [])))
-            records.append(
-                {
-                    "flag": flag,
-                    "dataset_code": dataset_code,
-                    "folder": folder,
-                    "canonical_name": canonical_by_flag.get(flag, folder),
-                    "aliases": aliases,
-                }
-            )
-
-        out = SwiftTable(pd.DataFrame(records))
-        out.attrs["source"] = "wris"
-        out.attrs["type"] = "variables"
-        return out
+            variable = ["Rainfall"]
+        if isinstance(variable, str):
+            variable = [variable]
+            
+        for var in variable:
+            # Map legacy WRIS flags
+            q = var
+            if var == "water_level": q = "Water Level"
+            elif var == "discharge": q = "Discharge"
+            elif var == "rainfall": q = "Rainfall"
+            
+            if not quiet: print(f"Searching for {q} in {basin}...")
+            df = search(query=q, location=basin)
+            if df is not None and not df.empty:
+                fetch(df, output_dir=output_dir, overwrite=overwrite, quiet=quiet, plot=plot)
+            else:
+                print(f"No results found for {q} in {basin}.")
 
     @staticmethod
     def basins(variable=None):
-        """Return WRIS basins as a table.
+        import warnings
+        import pandas as pd
+        warnings.warn("wris.basins() is deprecated. Use hydroswift.search(location='...')", DeprecationWarning, stacklevel=2)
+        return pd.DataFrame()
 
-        Parameters
-        ----------
-        variable : str or list[str], optional
-            When provided, expands the table to one row per
-            ``(basin, variable)`` pair so it can be passed directly to
-            ``hydroswift.fetch(...)`` for full-basin downloads.
-        """
-        base_records = [{"id": k, "basin": v} for k, v in WRIS_BASINS.items()]
+    @staticmethod
+    def variables():
+        return ["rainfall", "water_level", "discharge", "temperature", "humidity", "solar", "atm_pressure", "sediment", "groundwater"]
 
-        var_list: list[str] = []
-        if variable is not None:
-            if isinstance(variable, str):
-                raw_vars = [variable]
-            elif isinstance(variable, (list, tuple, set)):
-                raw_vars = list(variable)
-            else:
-                raw_vars = [str(variable)]
-
-            for v in raw_vars:
-                vv = str(v).strip()
-                if not vv:
-                    continue
-                # Validate variable names/flags early with the same resolver
-                # used by download/stations.
-                _resolve_variable(vv)
-                var_list.append(vv)
-
-            if not var_list:
-                raise ValueError(
-                    "variable must include at least one valid value "
-                    "(for example: 'discharge' or ['solar', 'sediment'])."
-                )
-
-        if var_list:
-            records = []
-            for rec in base_records:
-                for v in var_list:
-                    records.append({"id": rec["id"], "basin": rec["basin"], "variable": v})
-        else:
-            records = base_records
-
-        out = SwiftTable(pd.DataFrame(records))
-        out.attrs["source"] = "wris"
-        out.attrs["fetch_source"] = "wris"
-        out.attrs["type"] = "basins"
-        out.attrs["basin"] = [rec["basin"] for rec in base_records]
-        if var_list:
-            out.attrs["variable"] = var_list
-        return out
-
+    @staticmethod
+    def stations(basin, variable=None):
+        import warnings
+        warnings.warn("wris.stations() is deprecated. Use hydroswift.search(location='...', query='...')", DeprecationWarning, stacklevel=2)
+        return search(query=variable, location=basin)
 
 class _CwcNamespace:
     """``swift.cwc`` namespace for CWC flood-forecast operations."""
