@@ -33,6 +33,15 @@ data/
 # --------------------------------------------------
 test_output*/
 *.gpkg
+output_new/
+out.txt
+qt_debug.txt
+patch_*.py
+clean_tests*.py
+test_naming.py
+test_parse.py
+search_feature.py
+nwdp_panel_code.py
 
 # --------------------------------------------------
 # Temporary / analysis files
