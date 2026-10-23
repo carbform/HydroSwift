@@ -522,8 +522,9 @@ swift_app/
 ├── __main__.py
 ├── api.py
 ├── banner.py
+├── cwc_rsms.py             ← CWC RSMS & SWOT Reservoir Engine
 ├── ... (existing files)
-└── gui/                    ← NEW
+└── gui/
     ├── __init__.py
     ├── app.py
     ├── main_window.py
@@ -598,6 +599,8 @@ swift_app/
 | Background Tasks | ✅ Complete | WorkerThread |
 | Plotting | ✅ Complete | Matplotlib integration |
 | Geospatial Export | ✅ Complete | GeoPackage support |
+| CWC RSMS Reservoirs | ✅ Complete | cwc_rsms.py / CLI & Python API |
+| SWOT Satellite DB | ✅ Complete | UnifiedReservoirBuilder |
 
 ---
 

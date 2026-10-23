@@ -36,15 +36,19 @@ bash scripts/launch_hyswift_gui.sh   # Quick-start script
 **Outputs**: `output/wris/{basin}/{variable}/*.csv`
 
 ### Tab 2: CWC Stations (💧)
-**Purpose**: Access Central Water Commission flood forecasting data
+**Purpose**: Access Central Water Commission flood forecasting data & reservoirs
 
 - **Browse Stations**: List of monitoring stations
 - **Filter Basin**: Narrow down by region
 - **Select Stations**: Multi-select from list
 - **Download**: Retrieve water level data
 - **Refresh Metadata**: Update station information
+- **Reservoirs & RSMS**: Supports CWC Reservoir Storage Monitoring System (RSMS) live daily snapshots, weekly bulletin PDF extraction, and SWOT satellite WSE harmonization via CLI / Python API.
 
-**Outputs**: `output/cwc/{basin}/stations/*.csv`
+**Outputs**:
+- River stations: `output/cwc/{basin}/stations/*.csv`
+- Reservoirs: `output/cwc/rsms_daily_snapshots.csv`, `output/cwc/cwc_bulletin_backfill.csv`
+- Harmonized DB: `output/reservoir_geodb/unified_reservoir_swot_gauge.gpkg`
 
 ### Tab 3: Configuration (⚙️)
 **Purpose**: Set download parameters and options

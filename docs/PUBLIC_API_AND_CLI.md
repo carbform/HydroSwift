@@ -64,6 +64,10 @@ The CLI notebook emphasizes:
 | Discover CWC station metadata | `hydroswift.cwc.stations(...)` | `hyswift --list` gives only a summary, not the full table |
 | Merge existing output | `hydroswift.merge_only(input_dir='output')` | `hyswift --merge-only --input-dir output` |
 | Plot existing output | `hydroswift.plot_only(input_dir='output')` | `hyswift --plot-only --input-dir output` |
+| Fetch CWC daily reservoir snapshot | `hydroswift.rsms.daily(output_path=...)` | `hyswift --rsms-daily --output-dir output` |
+| Backfill CWC weekly reservoir bulletins | `hydroswift.rsms.backfill(start_date=...)` | `hyswift --rsms-backfill --start-date ...` |
+| Build unified SWOT & gauge reservoir DB | `hydroswift.swot_reservoir_merge(...)` | `hyswift --swot-reservoir-merge ...` |
+| Build SWOT river gauge GeoPackage | `hydroswift.swot_merge(...)` | `hyswift --swot-merge ...` |
 | Show help | `hydroswift.help()` / `hydroswift.cli_help()` | `hyswift -h` |
 | Show citation | `hydroswift.cite()` | `hyswift --cite` |
 | Coffee easter egg | `hydroswift.coffee()` | `hyswift --coffee` |

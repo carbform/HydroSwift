@@ -254,7 +254,67 @@ This is a metadata maintenance helper, not part of the common download path.
 
 ---
 
-## 4. Using tables for downloads with `hydroswift.fetch(...)`
+## 4. CWC Reservoirs & RSMS namespace
+
+HydroSwift provides native integration with the Central Water Commission Reservoir Storage Monitoring System (RSMS at `https://rsms.cwc.gov.in/frameWork/web/public-dashboard`).
+
+Access via either `hydroswift.rsms` or `hydroswift.cwc.reservoirs`.
+
+### `hydroswift.rsms.daily(output_path=None, timeout=15, max_reservoirs=None)`
+
+Fetches the latest real-time daily reservoir storage, elevation, and benchmark capacity snapshot for 180+ major reservoirs monitored by CWC.
+
+```python
+import hydroswift
+
+# Fetch and return daily reservoir snapshot as a SwiftTable
+daily_df = hydroswift.rsms.daily(output_path="output/cwc/rsms_daily_snapshots.csv")
+print(daily_df[["reservoir_name", "entry_date", "storage_bcm", "live_cap_bcm", "frl_meter"]].head())
+```
+
+### `hydroswift.rsms.bulletins(from_date="", to_date="", cache_file=None)`
+
+Queries the RSMS bulletin catalog using authenticated AES-128-CBC encryption to discover published weekly bulletin PDF reports.
+
+```python
+bulletins = hydroswift.rsms.bulletins(from_date="2025-05-01")
+print(f"Discovered {len(bulletins)} bulletins.")
+```
+
+### `hydroswift.rsms.backfill(start_date="2025-05-15", end_date=None, output_csv=None, bulletin_dir="output/cwc/bulletins")`
+
+Downloads and parses tabular reservoir records across weekly bulletin PDFs into a clean, harmonized time series DataFrame.
+
+```python
+bulletin_ts = hydroswift.rsms.backfill(
+    start_date="2025-05-15",
+    output_csv="output/cwc/cwc_bulletin_backfill.csv"
+)
+```
+
+### `hydroswift.swot_reservoir_merge(...)`
+
+Builds a unified multimodal database combining SWOT KaRIn satellite water surface elevations, in-situ gauge measurements, and reservoir polygon geometries.
+
+Automated data hygiene filters resolve known transcription anomalies (e.g. Manikdoh 10× clerical error and Rihand ft ↔ m datum shift).
+
+```python
+metrics = hydroswift.swot_reservoir_merge(
+    reservoir_shp="swot_lakesp/large_reservoirs/reservoir_shp/reservoirs_ids.shp",
+    swot_observations="swot_lakesp/reservoir_geodb/reservoir_wse.sqlite",
+    gauge_source="swot_lakesp/gauge_cache",
+    output_gpkg="output/reservoir_geodb/unified_reservoir_swot_gauge.gpkg",
+    output_sqlite="output/reservoir_geodb/unified_reservoir_swot_gauge.sqlite",
+    output_parquet="output/reservoir_geodb/unified_reservoir_timeseries.parquet",
+    tolerance_days=3.5,
+    fix_anomalies=True,
+)
+print("Harmonization summary:", metrics)
+```
+
+---
+
+## 5. Using tables for downloads with `hydroswift.fetch(...)`
 
 `hydroswift.fetch(...)` is the main bridge between metadata discovery tables and actual downloads.
 

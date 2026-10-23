@@ -105,6 +105,65 @@ Refreshes packaged metadata against `name-code.csv` using live lookups.
 
 ---
 
+### CWC Reservoirs & RSMS namespace (`hydroswift.rsms` / `hydroswift.cwc.reservoirs`)
+
+#### `hydroswift.rsms.daily(output_path=None, timeout=15, max_reservoirs=None)`
+
+Fetches the latest real-time daily reservoir storage, elevation, and capacity snapshot for 180+ major reservoirs monitored by CWC RSMS.
+
+Parameters:
+
+- `output_path`: Destination CSV path to append/write.
+- `timeout`: HTTP timeout in seconds (default `15`).
+- `max_reservoirs`: Optional limit for testing.
+
+Returns: `SwiftTable` containing `reservoir_unique_id`, `reservoir_name`, `entry_date`, `storage_bcm`, `live_cap_bcm`, `gross_cap_bcm`, `cap_dsl_bcm`, `frl_meter`, `dsl_mtr`, `latitude`, `longitude`.
+
+#### `hydroswift.rsms.bulletins(from_date='', to_date='', cache_file=None)`
+
+Discovers published weekly bulletin PDF reports from the CWC RSMS portal.
+
+Parameters:
+
+- `from_date`: Start date filter (YYYY-MM-DD).
+- `to_date`: End date filter (YYYY-MM-DD).
+- `cache_file`: Optional JSON path to cache discovered catalog.
+
+Returns: `SwiftTable` of bulletin metadata.
+
+#### `hydroswift.rsms.backfill(start_date='2025-05-15', end_date=None, output_csv=None, bulletin_dir='output/cwc/bulletins')`
+
+Downloads and parses tabular reservoir records from historical weekly bulletin PDFs into a consolidated time series.
+
+Parameters:
+
+- `start_date`: Start date filter (default `'2025-05-15'`).
+- `end_date`: Optional end date filter.
+- `output_csv`: Destination CSV path.
+- `bulletin_dir`: Local directory to store downloaded bulletin PDFs.
+
+Returns: `SwiftTable` of bulletin observation records (`reservoir_name`, `frl_m`, `water_level_m`, `live_cap_bcm`, `current_storage_bcm`, `date`).
+
+#### `hydroswift.swot_reservoir_merge(reservoir_shp, swot_observations, gauge_source, output_gpkg=None, output_sqlite=None, output_parquet=None, cwc_metadata=None, tolerance_days=3.5, fix_anomalies=True)`
+
+Harmonizes SWOT KaRIn satellite water surface elevations, in-situ gauge measurements, and reservoir polygon shapefiles into unified multi-format outputs.
+
+Parameters:
+
+- `reservoir_shp`: Path to reservoir polygon shapefile or GeoPackage.
+- `swot_observations`: Path to SQLite DB, GeoPackage, or DataFrame of SWOT satellite passes.
+- `gauge_source`: Directory of gauge CSVs (`<reservoir_id>.csv`), single CSV file, or DataFrame.
+- `output_gpkg`: Output GeoPackage path (layers: `reservoirs`, `swot_observations`, `gauge_timeseries`, `unified_timeseries`).
+- `output_sqlite`: Output SQLite path (indexed tables).
+- `output_parquet`: Output Parquet path (fast columnar unified time series).
+- `cwc_metadata`: Optional metadata table with FRL, DSL, capacities.
+- `tolerance_days`: Temporal matching window in days (default `3.5`).
+- `fix_anomalies`: Automatically fix transcription outliers (Manikdoh 10× decimal typo, Rihand ft $\leftrightarrow$ m shift). Default `True`.
+
+Returns: Dictionary of output paths and observation metrics.
+
+---
+
 ### Unified download helper
 
 #### `hydroswift.fetch(stations, *, output_dir='output', start_date='1950-01-01', end_date=None, format='csv', overwrite=False, merge=False, plot=False, quiet=False, delay=0.25, refresh=False)`

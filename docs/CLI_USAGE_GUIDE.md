@@ -122,7 +122,50 @@ Behavior notes:
 
 ---
 
-## 5. Date and output controls
+## 5. CWC Reservoirs & RSMS Mode
+
+HydroSwift connects directly to the Central Water Commission Reservoir Storage Monitoring System (RSMS) to retrieve real-time daily snapshots and scrape historical weekly bulletin archives for 180+ major reservoirs across India.
+
+### Live Daily Reservoir Snapshot
+
+Queries the RSMS GeoServer WFS layer and authenticated reservoir details API (with dynamic AES-128-CBC encryption and HMAC request signing):
+
+```bash
+hyswift --rsms-daily --output-dir output
+```
+
+Output: `output/cwc/rsms_daily_snapshots.csv` (contains entry date, current storage BCM, live/gross capacity, DSL, FRL, latitude, longitude).
+
+### Historical Weekly Bulletin Backfill
+
+Downloads and parses tabular reservoir records from CWC weekly bulletin PDFs:
+
+```bash
+hyswift --rsms-backfill --start-date 2025-05-15 --output-dir output
+```
+
+Output: `output/cwc/cwc_bulletin_backfill.csv` and cached PDFs in `output/cwc/bulletins/`.
+
+### SWOT Satellite & Gauge Unified Database Builder
+
+Harmonizes SWOT KaRIn satellite passes with in-situ gauge measurements ($\pm 3.5\text{ days}$) and reservoir polygon shapefiles, applying automated anomaly detection and data cleaning:
+
+```bash
+hyswift --swot-reservoir-merge \
+  --reservoir-shp swot_lakesp/large_reservoirs/reservoir_shp/reservoirs_ids.shp \
+  --swot-db swot_lakesp/reservoir_geodb/reservoir_wse.sqlite \
+  --gauge-cache swot_lakesp/gauge_cache \
+  --unified-output-dir output/reservoir_geodb
+```
+
+Outputs:
+- `unified_reservoir_swot_gauge.gpkg` (spatial layer `reservoirs`, plus tables `swot_observations`, `gauge_timeseries`, `unified_timeseries`)
+- `unified_reservoir_swot_gauge.sqlite` (indexed relational database)
+- `unified_reservoir_timeseries.parquet` (fast columnar time series)
+
+---
+
+## 6. Date and output controls
 
 Common download controls include:
 
@@ -154,7 +197,7 @@ hyswift -b 5 -q --plot
 
 ---
 
-## 6. Post-processing modes
+## 7. Post-processing modes
 
 ### Merge only
 
@@ -186,7 +229,7 @@ hyswift --plot-only --input-dir output --plot-svg --plot-moving-average-window 3
 
 ---
 
-## 7. Metadata and utility commands
+## 8. Metadata and utility commands
 
 ### List mode
 
@@ -209,7 +252,7 @@ hyswift --coffee
 
 ---
 
-## 8. CLI to Python equivalence
+## 9. CLI to Python equivalence
 
 Examples:
 
@@ -221,10 +264,13 @@ Examples:
 | `hyswift --plot-only --input-dir output` | `hydroswift.plot_only(input_dir='output')` |
 | `hyswift --cwc-station 032-LGDHYD` | `hydroswift.cwc.download(station=['032-LGDHYD'])` |
 | `hyswift --cwc-basin Krishna` | `hydroswift.cwc.download(basin=['Krishna'])` |
+| `hyswift --rsms-daily` | `hydroswift.rsms.daily()` |
+| `hyswift --rsms-backfill --start-date 2025-05-15` | `hydroswift.rsms.backfill(start_date='2025-05-15')` |
+| `hyswift --swot-reservoir-merge ...` | `hydroswift.swot_reservoir_merge(...)` |
 
 ---
 
-## 9. Troubleshooting and common mistakes
+## 10. Troubleshooting and common mistakes
 
 ### "No dataset selected" in WRIS mode
 

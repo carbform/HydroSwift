@@ -2,14 +2,16 @@
 
 **Fast, unified workflows for hydrological data.**
 
-HydroSwift is a Python toolkit for integrating, processing, and visualizing hydrological datasets at basin scale. It automates retrieval from [India-WRIS](https://nwic.in/wris/#/timeseriesdata) and the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/) while preserving reproducible CLI and notebook workflows.
+HydroSwift is a Python toolkit for integrating, processing, and visualizing hydrological datasets at basin scale. It automates retrieval from [India-WRIS](https://nwic.in/wris/#/timeseriesdata), the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/), the [CWC Reservoir Storage Monitoring System (RSMS)](https://rsms.cwc.gov.in/frameWork/web/public-dashboard), and satellite altimetry pipelines like SWOT KaRIn while preserving reproducible CLI and notebook workflows.
 
 ## Supported data sources
 
 | Source | Variables |
 |---|---|
 | **India-WRIS** | Discharge, water level, rainfall, temperature, humidity, solar radiation, sediment, groundwater level, atmospheric pressure |
-| **CWC FFS** | Water level; RC-derived discharge (when local RC curves are available) |
+| **CWC FFS** | River water level; RC-derived discharge (when local RC curves are available) |
+| **CWC RSMS** | Reservoir water level, current live storage, gross capacity, dead storage level (DSL), FRL |
+| **SWOT Satellite** | KaRIn water surface elevation (WSE), lake/reservoir surface area, and quality flags |
 
 ## How HydroSwift is organised
 
