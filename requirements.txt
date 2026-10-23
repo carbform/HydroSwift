@@ -4,6 +4,7 @@ pandas
 tqdm
 openpyxl
 matplotlib
+cryptography
 
 # Full-feature extras used by merge/banner flows
 geopandas

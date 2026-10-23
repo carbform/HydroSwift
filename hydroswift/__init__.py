@@ -19,6 +19,8 @@ VERSION_FULL = f"{VERSION} — {__codename__}"
 from .api import (  # noqa: E402
     wris,
     cwc_ns as cwc,
+    cwc_reservoirs,
+    rsms,
     nwdp,
     search,
     help,
@@ -29,6 +31,7 @@ from .api import (  # noqa: E402
     cite,
     coffee,
     swot_merge,
+    swot_reservoir_merge,
 )
 from .base_client import BaseHydrologyClient  # noqa: E402
 

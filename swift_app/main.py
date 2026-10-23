@@ -260,6 +260,55 @@ def main() -> int:
         return 0
 
     # ---------------------------------------------------------
+    # CWC RSMS & RESERVOIR MODES
+    # ---------------------------------------------------------
+
+    if getattr(args, "rsms_daily", False):
+        from .cwc_rsms import CwcRsmsClient
+        client = CwcRsmsClient()
+        out_csv = Path(args.output_dir) / "cwc" / "rsms_daily_snapshots.csv"
+        client.fetch_daily_snapshot(output_path=out_csv)
+        return 0
+
+    if getattr(args, "rsms_bulletins", False) or getattr(args, "rsms_backfill", False):
+        from .cwc_rsms import CwcRsmsClient
+        client = CwcRsmsClient()
+        out_csv = Path(args.output_dir) / "cwc" / "cwc_bulletin_backfill.csv"
+        bulletin_dir = Path(args.output_dir) / "cwc" / "bulletins"
+        client.backfill_bulletins(
+            start_date=args.start_date or "2025-05-15",
+            end_date=getattr(args, "end_date", None),
+            output_csv=out_csv,
+            bulletin_dir=bulletin_dir,
+        )
+        return 0
+
+    if getattr(args, "swot_reservoir_merge", False):
+        from .cwc_rsms import UnifiedReservoirBuilder
+        out_dir = Path(getattr(args, "unified_output_dir", None) or (Path(args.output_dir) / "reservoir_geodb"))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_gpkg = out_dir / "unified_reservoir_swot_gauge.gpkg"
+        out_sqlite = out_dir / "unified_reservoir_swot_gauge.sqlite"
+        out_parquet = out_dir / "unified_reservoir_timeseries.parquet"
+
+        if not getattr(args, "reservoir_shp", None):
+            raise SystemExit("Error: --swot-reservoir-merge requires --reservoir-shp <path_to_shp>")
+        if not getattr(args, "swot_db", None):
+            raise SystemExit("Error: --swot-reservoir-merge requires --swot-db <path_to_swot_sqlite>")
+        if not getattr(args, "gauge_cache", None):
+            raise SystemExit("Error: --swot-reservoir-merge requires --gauge-cache <path_to_gauge_cache_dir_or_csv>")
+
+        UnifiedReservoirBuilder.build_database(
+            reservoir_shp=args.reservoir_shp,
+            swot_observations=args.swot_db,
+            gauge_source=args.gauge_cache,
+            output_gpkg=out_gpkg,
+            output_sqlite=out_sqlite,
+            output_parquet=out_parquet,
+        )
+        return 0
+
+    # ---------------------------------------------------------
     # PLOT-ONLY MODE
     # ---------------------------------------------------------
 

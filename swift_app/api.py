@@ -53,6 +53,10 @@ Core namespaces:
     hydroswift.cwc.basins()                     # CWC basin summary
     hydroswift.cwc.stations(...)                # CWC station metadata table
     hydroswift.cwc.download(...)                # CWC download (explicit args)
+    hydroswift.cwc.reservoirs.daily(...)        # CWC reservoir live daily snapshot (RSMS)
+    hydroswift.cwc.reservoirs.bulletins(...)    # CWC reservoir weekly bulletin archive
+    hydroswift.cwc.reservoirs.backfill(...)     # CWC reservoir bulletin backfill
+    hydroswift.cwc.reservoirs.build_database(...) # SWOT & in-situ reservoir DB builder
 
 Unified table workflow:
     hydroswift.fetch(table, ...)           # Download from WRIS/CWC station/basin tables
@@ -61,6 +65,7 @@ Post-processing helpers:
     hydroswift.merge_only(...)             # Merge station files into per-variable GPKGs
     hydroswift.plot_only(...)              # Generate hydrograph plots
     hydroswift.swot_merge(...)             # Build SWOT-ready merged GeoPackage (wris_merged.gpkg)
+    hydroswift.swot_reservoir_merge(...)   # Build unified SWOT & in-situ reservoir GeoPackage
 
 Utilities:
     hydroswift.help()                           # this Python API help menu
@@ -1259,9 +1264,179 @@ class _CwcNamespace:
         out.attrs["appended_count"] = int(len(appended))
         return out
 
+    @property
+    def reservoirs(self):
+        """Access CWC Reservoir Storage Monitoring System (RSMS) operations."""
+        return _CwcReservoirsNamespace()
+
+
+class _CwcReservoirsNamespace:
+    """Namespace for CWC Reservoir Storage Monitoring System (RSMS) workflows."""
+
+    @staticmethod
+    def daily(output_path=None, timeout=15, max_reservoirs=None):
+        """Fetch latest real-time daily reservoir storage & level snapshot.
+
+        Parameters
+        ----------
+        output_path : str or Path, optional
+            Destination CSV to append or save the snapshot.
+        timeout : int, default 15
+            Request timeout in seconds.
+        max_reservoirs : int, optional
+            Limit reservoir count (useful for testing).
+
+        Returns
+        -------
+        SwiftTable
+            Table of daily reservoir observations.
+        """
+        from .cwc_rsms import CwcRsmsClient
+        client = CwcRsmsClient()
+        df = client.fetch_daily_snapshot(output_path=output_path, timeout=timeout, max_reservoirs=max_reservoirs)
+        out = SwiftTable(df)
+        out.attrs["source"] = "cwc_rsms"
+        out.attrs["type"] = "daily_snapshot"
+        return out
+
+    @staticmethod
+    def bulletins(from_date="", to_date="", cache_file=None):
+        """Discover published CWC weekly bulletin reports from the RSMS portal.
+
+        Parameters
+        ----------
+        from_date : str, default ""
+            Optional start date filter (YYYY-MM-DD).
+        to_date : str, default ""
+            Optional end date filter (YYYY-MM-DD).
+        cache_file : str or Path, optional
+            Cache JSON path.
+
+        Returns
+        -------
+        SwiftTable
+            Table of published bulletin reports.
+        """
+        from .cwc_rsms import CwcRsmsClient
+        client = CwcRsmsClient()
+        items = client.fetch_bulletin_catalog(from_date=from_date, to_date=to_date, cache_file=cache_file)
+        out = SwiftTable(pd.DataFrame(items))
+        out.attrs["source"] = "cwc_rsms"
+        out.attrs["type"] = "bulletin_catalog"
+        return out
+
+    @staticmethod
+    def backfill(start_date="2025-05-15", end_date=None, output_csv=None, bulletin_dir="output/cwc/bulletins"):
+        """Download and parse historical CWC bulletins into a consolidated time series.
+
+        Parameters
+        ----------
+        start_date : str, default '2025-05-15'
+            Start date for backfill (YYYY-MM-DD).
+        end_date : str, optional
+            End date for backfill.
+        output_csv : str or Path, optional
+            CSV file to store parsed observations.
+        bulletin_dir : str or Path, default 'output/cwc/bulletins'
+            Folder where bulletin PDFs are downloaded.
+
+        Returns
+        -------
+        SwiftTable
+            Consolidated reservoir time series table.
+        """
+        from .cwc_rsms import CwcRsmsClient
+        client = CwcRsmsClient()
+        df = client.backfill_bulletins(start_date=start_date, end_date=end_date, output_csv=output_csv, bulletin_dir=bulletin_dir)
+        out = SwiftTable(df)
+        out.attrs["source"] = "cwc_rsms"
+        out.attrs["type"] = "bulletin_timeseries"
+        return out
+
+    @staticmethod
+    def build_database(
+        reservoir_shp,
+        swot_observations,
+        gauge_source,
+        output_gpkg=None,
+        output_sqlite=None,
+        output_parquet=None,
+        cwc_metadata=None,
+        tolerance_days=3.5,
+        fix_anomalies=True,
+    ):
+        """Build unified SWOT & in-situ reservoir database (GPKG, SQLite, Parquet).
+
+        Parameters
+        ----------
+        reservoir_shp : str or Path
+            Path to reservoir polygon shapefile or GeoPackage.
+        swot_observations : str, Path, or DataFrame
+            Path to SQLite database containing `observations` table, or DataFrame.
+        gauge_source : str, Path, or DataFrame
+            Directory of gauge CSVs (`<reservoir_id>.csv`), single CSV file, or DataFrame.
+        output_gpkg : str or Path, optional
+            Path for destination GeoPackage.
+        output_sqlite : str or Path, optional
+            Path for destination SQLite database.
+        output_parquet : str or Path, optional
+            Path for destination Parquet unified time series file.
+        cwc_metadata : str, Path, or DataFrame, optional
+            Metadata table containing FRL, DSL, capacities.
+        tolerance_days : float, default 3.5
+            Temporal matching tolerance in days.
+        fix_anomalies : bool, default True
+            Fix known transcription outliers (Manikdoh, Rihand).
+
+        Returns
+        -------
+        dict
+            Summary metrics including row counts and output paths.
+        """
+        from .cwc_rsms import UnifiedReservoirBuilder
+        return UnifiedReservoirBuilder.build_database(
+            reservoir_shp=reservoir_shp,
+            swot_observations=swot_observations,
+            gauge_source=gauge_source,
+            output_gpkg=output_gpkg,
+            output_sqlite=output_sqlite,
+            output_parquet=output_parquet,
+            cwc_metadata=cwc_metadata,
+            tolerance_days=tolerance_days,
+            fix_anomalies=fix_anomalies,
+        )
+
+
+def swot_reservoir_merge(
+    reservoir_shp,
+    swot_observations,
+    gauge_source,
+    output_gpkg=None,
+    output_sqlite=None,
+    output_parquet=None,
+    cwc_metadata=None,
+    tolerance_days=3.5,
+    fix_anomalies=True,
+):
+    """Build SWOT-ready unified reservoir database combining satellite observations and in-situ gauges."""
+    from .cwc_rsms import UnifiedReservoirBuilder
+    return UnifiedReservoirBuilder.build_database(
+        reservoir_shp=reservoir_shp,
+        swot_observations=swot_observations,
+        gauge_source=gauge_source,
+        output_gpkg=output_gpkg,
+        output_sqlite=output_sqlite,
+        output_parquet=output_parquet,
+        cwc_metadata=cwc_metadata,
+        tolerance_days=tolerance_days,
+        fix_anomalies=fix_anomalies,
+    )
+
 
 wris = _WrisNamespace()
 cwc_ns = _CwcNamespace()
+cwc_reservoirs = _CwcReservoirsNamespace()
+rsms = _CwcReservoirsNamespace()
 nwdp = _NwdpNamespace()
 
 

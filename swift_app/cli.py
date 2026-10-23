@@ -180,6 +180,59 @@ def build_parser() -> argparse.ArgumentParser:
         help="Disable RC-based discharge generation in CWC mode.",
     )
 
+    reservoirs = parser.add_argument_group("CWC Reservoirs & RSMS")
+    reservoirs.add_argument(
+        "--rsms-daily",
+        "--cwc-reservoir-daily",
+        dest="rsms_daily",
+        action="store_true",
+        help="Fetch today's real-time daily reservoir storage & level snapshot from CWC RSMS.",
+    )
+    reservoirs.add_argument(
+        "--rsms-bulletins",
+        "--cwc-reservoir-bulletins",
+        dest="rsms_bulletins",
+        action="store_true",
+        help="Download and parse historical CWC weekly bulletin reports from RSMS.",
+    )
+    reservoirs.add_argument(
+        "--rsms-backfill",
+        dest="rsms_backfill",
+        action="store_true",
+        help="Perform backfill of CWC reservoir bulletin time series.",
+    )
+    reservoirs.add_argument(
+        "--swot-reservoir-merge",
+        "--reservoir-merge",
+        dest="swot_reservoir_merge",
+        action="store_true",
+        help="Build unified SWOT & in-situ reservoir GeoPackage, SQLite, and Parquet artifacts.",
+    )
+    reservoirs.add_argument(
+        "--reservoir-shp",
+        dest="reservoir_shp",
+        default=None,
+        help="Path to reservoir polygon shapefile or GeoPackage for --swot-reservoir-merge.",
+    )
+    reservoirs.add_argument(
+        "--swot-db",
+        dest="swot_db",
+        default=None,
+        help="Path to SWOT observations SQLite DB for --swot-reservoir-merge.",
+    )
+    reservoirs.add_argument(
+        "--gauge-cache",
+        dest="gauge_cache",
+        default=None,
+        help="Directory or CSV file of in-situ gauge records for --swot-reservoir-merge.",
+    )
+    reservoirs.add_argument(
+        "--unified-output-dir",
+        dest="unified_output_dir",
+        default=None,
+        help="Directory to save unified reservoir GPKG, SQLite, and Parquet artifacts.",
+    )
+
     output = parser.add_argument_group("Output options")
     output.add_argument("--metadata", action="store_true", help="Save station metadata as CSV")
     output.add_argument("--input-dir", help="Input directory for --merge-only / --plot-only")

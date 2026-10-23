@@ -17,7 +17,8 @@ dependencies = [
     "pandas",
     "tqdm",
     "openpyxl",
-    "matplotlib"
+    "matplotlib",
+    "cryptography"
 ]
 
 [project.urls]
