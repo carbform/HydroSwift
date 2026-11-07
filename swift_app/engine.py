@@ -343,7 +343,7 @@ class CwcAdapter:
                 "Location": f"{r.get('basin', '')}, {r.get('state', '')}",
                 "Variable": ("Water level; discharge (rating-curve estimate)"
                              if _has_rc(_get_rc_row, r) else "Water level"),
-                "Resolution": "Hourly",
+                "Resolution": "Sub-daily (about 3 readings per day)",
                 "ID": str(r.get("code", "")),
                 "lat": r.get("lat"), "lon": r.get("lon"), "Unit": "m / m3/s",
                 "CoverageStart": None, "CoverageEnd": None, "CoverageKnown": False,
@@ -631,3 +631,23 @@ def _version() -> str:
         return __version__
     except Exception:
         return "unknown"
+
+
+def save_catalog(table: pd.DataFrame, path) -> str:
+    """Write a catalog and its provenance (query, per-source status) to JSON."""
+    doc = {"hydroswift": _version(), "saved": _now(), "attrs": table.attrs,
+           "rows": json.loads(table.to_json(orient="records", date_format="iso"))}
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(doc, indent=2, default=str))
+    return str(path)
+
+
+def load_catalog(path) -> pd.DataFrame:
+    """Read a catalog written by ``save_catalog``; provenance is restored in ``attrs``."""
+    doc = json.loads(Path(path).read_text())
+    df = pd.DataFrame(doc["rows"])
+    for c in CATALOG_COLUMNS + ["_org_id", "_basin", "_rl_zero"]:
+        if c not in df.columns:
+            df[c] = None
+    df.attrs.update(doc.get("attrs") or {})
+    return df

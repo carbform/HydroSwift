@@ -5,7 +5,7 @@
 
 **Fast, unified workflows for hydrological data.**
 
-HydroSwift automates retrieval, processing, and visualization of hydrological observations from [India-WRIS](https://nwic.in/wris/#/timeseriesdata), the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/), and the [CWC Reservoir Storage Monitoring System (RSMS)](https://rsms.cwc.gov.in/frameWork/web/public-dashboard). It supports river discharge, water levels, reservoir storage & capacities, SWOT KaRIn satellite water surface elevations, rainfall, temperature, humidity, solar radiation, sediment, groundwater, and atmospheric pressure datasets.
+HydroSwift automates retrieval, processing, and visualization of hydrological observations from the [National Water Informatics Portal (NWDP, which now carries the former India-WRIS data)](https://nwdp.nwic.gov.in), the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/), and the [CWC Reservoir Storage Monitoring System (RSMS)](https://rsms.cwc.gov.in/frameWork/web/public-dashboard). It supports river discharge, water levels, reservoir storage & capacities, SWOT KaRIn satellite water surface elevations, rainfall, temperature, humidity, solar radiation, sediment, groundwater, and atmospheric pressure datasets.
 
 ---
 
@@ -28,76 +28,50 @@ hyswift --version
 
 ## Quick Start
 
-### Python API
+HydroSwift has one workflow, the same in Python, the CLI and the GUI: **Find -> Review -> Get -> Use**.
+
+### Python
 
 ```python
-import hydroswift
+import hydroswift as hs
 
-# Discover → download → merge in one step (WRIS)
-stations = hydroswift.wris.stations(basin="Godavari", variable="discharge")
-hydroswift.fetch(stations, start_date="2024-01-01", end_date="2024-03-31", merge=True)
+cat = hs.search("rainfall", "Karnataka", period=("2020", "2022"))   # Find
+cat.attrs["source_status"]      # Review: what each source answered (ok / failed / truncated, rows dropped)
+hs.estimate(cat.head(3))        # Review: how many records? (exact for NWDP, "unknown" elsewhere)
+run = hs.fetch(cat.head(3), output_dir="output", period=("2020", "2022"))   # Get (writes manifest.json)
+data = hs.load(run)             # Use: one tidy table - time, value, variable, unit, station, source, method, flag
+hs.merge(run, "output/all.parquet")   # or .csv / .gpkg
+hs.plot(run, "output/plots")
 
-# Or download directly when you already know the inputs (CWC river gauges)
-hydroswift.cwc.download(station=["040-CDJAPR", "032-LGDHYD"], merge=True)
+# exact selection when you know what you want
+hs.search("discharge", basin="Krishna", sources=["CWC"])     # exact basin, not substring
+hs.search(ids=["001-CDBNG"], sources=["CWC"])                # exact catalog IDs
 
-# Fetch real-time daily reservoir storage & level snapshots (CWC RSMS)
-hydroswift.rsms.daily(output_path="output/cwc/rsms_daily_snapshots.csv")
-
-# Backfill historical CWC weekly bulletin reports (180+ reservoirs)
-hydroswift.rsms.backfill(start_date="2025-05-15", output_csv="output/cwc/cwc_bulletin_backfill.csv")
-
-# Harmonize SWOT satellite passes with in-situ gauges into a unified GeoPackage
-hydroswift.swot_reservoir_merge(
-    reservoir_shp="reservoirs.shp",
-    swot_observations="swot_obs.sqlite",
-    gauge_source="gauge_cache/",
-    output_gpkg="output/reservoir_geodb/unified_reservoir_swot_gauge.gpkg",
-)
-
-# Discover datasets from the NWDP CKAN API (by State/Organization or Theme)
-nwdp_datasets = hydroswift.nwdp.datasets(query="Ground Water", org="Karnataka GW")
-hydroswift.fetch(nwdp_datasets) # Bulk download all matches!
-
-# Download arbitrary tabular data from the NWDP CKAN API using a resource ID
-hydroswift.nwdp.download(
-    resource_id="00ee62df-76d2-4431-85dd-a5da3bfc36f0", 
-    filters={"State": "Karnataka", "District": "Bengaluru Urban"}
-)
+# Reservoirs (CWC RSMS)
+hs.rsms.daily(output_path="output/cwc_rsms/daily_snapshot.csv")
+hs.rsms.backfill(start_date="2025-05-15", output_csv="output/cwc_rsms/bulletin_backfill.csv")
+hs.swot_reservoir_merge(reservoir_shp="reservoirs.shp", swot_observations="swot_obs.sqlite", gauge_source="gauge_cache/")
 ```
 
-### Interactive Wizard (Beginner Friendly)
-
-If you are new to HydroSwift, simply type `hyswift` in your terminal without any arguments to launch the step-by-step interactive mode:
+### Command line
 
 ```bash
-hyswift
+hyswift search rainfall --where Karnataka --period 2020:2022 --save cat.json
+hyswift get --from cat.json --rows 0,2 --period 2020:2022 --out output
+hyswift show output                  # tidy summary of what was fetched
+hyswift merge output all.parquet
+hyswift plot output output/plots
+hyswift rsms daily                   # reservoir tools
+hyswift                              # no arguments: guided prompts (variable, place, period)
 ```
 
-### Expert CLI
+### What is stated, and what is assumed
 
-For advanced users and automated scripts, you can pass arguments directly:
-
-```bash
-hyswift -b Godavari -q --merge                          # WRIS discharge
-hyswift -b Krishna -q -rf -temp                         # multiple variables
-hyswift --cwc-basin Krishna Godavari                    # CWC water level
-hyswift --plot-only --input-dir output --plot-svg       # generate plots
-
-# CWC Reservoirs (RSMS) & SWOT Harmonization
-hyswift --rsms-daily --output-dir output                # Live daily reservoir snapshot
-hyswift --rsms-backfill --start-date 2025-05-15         # Scrape & parse bulletin PDFs
-hyswift --swot-reservoir-merge \
-  --reservoir-shp reservoirs.shp \
-  --swot-db swot_obs.sqlite \
-  --gauge-cache gauge_cache/                            # Build unified GPKG, SQLite & Parquet
-
-# NWDP CKAN API Commands
-hyswift --nwdp-state "Karnataka GW" --nwdp-query "Ground Water"   # Bulk download via search
-hyswift --nwdp-resource 00ee62df-76d2-4431-85dd-a5da3bfc36f0 \
-        --nwdp-filters '{"State":"Karnataka"}'                  # Direct download via ID
-```
-
----
+Every catalog row has an `Inferred` column naming fields the source did **not** state (for example the variable
+parsed from an NWDP dataset title, or the unknown coverage of a CWC station). CWC discharge exists only as a
+rating-curve estimate from stage; it is labelled `rc_guardian_2024` in `method`. Each `fetch` writes a
+`manifest.json` with the query, per-source status, endpoints, record counts, actual date spans and the TLS
+verification setting (NWDP requests currently run with certificate verification disabled).
 
 ## Documentation
 
@@ -114,17 +88,11 @@ Full docs are available at **[hydroswift.readthedocs.io](https://hydroswift.read
 
 ```
 output/
-  wris/<basin>/<variable>/*.csv
-  wris/<basin>/*.gpkg
-  cwc/<basin>/stations/*.csv
-  cwc/cwc_waterlevel*.gpkg
-  cwc/rsms_daily_snapshots.csv
-  cwc/cwc_bulletin_backfill.csv
-  cwc/bulletins/*.pdf
-  reservoir_geodb/
-    unified_reservoir_swot_gauge.gpkg
-    unified_reservoir_swot_gauge.sqlite
-    unified_reservoir_timeseries.parquet
+  manifest.json                      # every fetch; later runs add manifest_<timestamp>.json
+  nwdp/<organization>/NWDP_*.csv
+  cwc/<basin>/CWC_*.csv
+  cwc_rsms/CWC_RSMS_daily_snapshot_*.csv
+  plots/*.png                        # hs.plot
 ```
 
 ---

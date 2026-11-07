@@ -1,3 +1,6 @@
+!!! warning "Being redesigned"
+    This guide describes the previous GUI. The Expert CWC tab has been removed and the GUI is being rebuilt on the new Find -> Review -> Get -> Use engine.
+
 # HydroSwift GUI User & Developer Guide
 
 ## Overview

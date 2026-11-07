@@ -350,6 +350,7 @@ def test_tidy_cwc_marks_rating_curve_discharge_as_estimated(tmp_path):
         "discharge": [100.0, 110.0], "lat": [1.0] * 2, "lon": [2.0] * 2,
         "discharge_source": ["rc_guardian_2024"] * 2}), header="# HydroSwift\n# a: b\n")
     out = tidy.load(pd.DataFrame([item("CWC", "Shimoga", p)]))
+    assert set(out["station_name"]) == {"Shimoga"}  # the CWC file has no name column; the catalog title is used
     q = out[out.variable == "discharge"]
     assert set(q["method"]) == {"rc_guardian_2024"} and "rating curve" in q.iloc[0]["flag"]
     assert set(out[out.variable == "water_level"]["method"]) == {"observed"}

@@ -2,13 +2,13 @@
 
 **Fast, unified workflows for hydrological data.**
 
-HydroSwift is a Python toolkit for integrating, processing, and visualizing hydrological datasets at basin scale. It automates retrieval from [India-WRIS](https://nwic.in/wris/#/timeseriesdata), the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/), the [CWC Reservoir Storage Monitoring System (RSMS)](https://rsms.cwc.gov.in/frameWork/web/public-dashboard), and satellite altimetry pipelines like SWOT KaRIn while preserving reproducible CLI and notebook workflows.
+HydroSwift is a Python toolkit for integrating, processing, and visualizing hydrological datasets at basin scale. It automates retrieval from the [National Water Informatics Portal (NWDP, now carrying the former India-WRIS data)](https://nwdp.nwic.gov.in), the [CWC Flood Forecasting System](https://ffs.india-water.gov.in/), the [CWC Reservoir Storage Monitoring System (RSMS)](https://rsms.cwc.gov.in/frameWork/web/public-dashboard), and satellite altimetry pipelines like SWOT KaRIn while preserving reproducible CLI and notebook workflows.
 
 ## Supported data sources
 
 | Source | Variables |
 |---|---|
-| **India-WRIS** | Discharge, water level, rainfall, temperature, humidity, solar radiation, sediment, groundwater level, atmospheric pressure |
+| **NWDP (ex India-WRIS)** | Discharge, water level, rainfall, temperature, humidity, solar radiation, sediment, groundwater level, atmospheric pressure |
 | **CWC FFS** | River water level; RC-derived discharge (when local RC curves are available) |
 | **CWC RSMS** | Reservoir water level, current live storage, gross capacity, dead storage level (DSL), FRL |
 | **SWOT Satellite** | KaRIn water surface elevation (WSE), lake/reservoir surface area, and quality flags |
@@ -20,31 +20,27 @@ HydroSwift exposes two main interfaces:
 1. **Python API** via `import hydroswift`
 2. **CLI** via `hyswift ...` or `python -m hydroswift ...`
 
-The Python API offers two styles:
-
-- **Explicit namespace downloads** — use `hydroswift.wris.download(...)` or `hydroswift.cwc.download(...)` when you already know the basin/station values.
-- **Table-driven workflows** — discover basins or stations first, then pass those tables into `hydroswift.fetch(...)`.
+Both follow one workflow, **Find -> Review -> Get -> Use**: `search` shows what exists and where it comes from (including failures and what was inferred), `estimate` shows how big it is, `fetch` downloads with a manifest, and `load` returns one tidy table.
 
 ## Quick start
 
 ### Python
 
 ```python
-import hydroswift
+import hydroswift as hs
 
-stations = hydroswift.wris.stations(basin="Godavari", variable="discharge")
-result = hydroswift.fetch(
-    stations,
-    start_date="2024-01-01",
-    end_date="2024-01-10",
-    merge=True,
-)
+cat = hs.search("rainfall", "Karnataka", period=("2020", "2022"))
+print(cat.attrs["source_status"])
+run = hs.fetch(cat.head(2), output_dir="output", period=("2020", "2022"))
+data = hs.load(run)
 ```
 
 ### CLI
 
 ```bash
-hyswift -b Godavari -q --start-date 2024-01-01 --end-date 2024-01-10 --merge
+hyswift search rainfall --where Karnataka --period 2020:2022 --save cat.json
+hyswift get --from cat.json --rows 0,1 --period 2020:2022 --out output
+hyswift show output
 ```
 
 ## Documentation
@@ -56,24 +52,12 @@ hyswift -b Godavari -q --start-date 2024-01-01 --end-date 2024-01-10 --merge
 | [API Functions Reference](API_FUNCTIONS_REFERENCE.md) | Signatures, parameters, and return shapes |
 | [API ↔ CLI Map](PUBLIC_API_AND_CLI.md) | Side-by-side notebook, Python, and CLI mapping |
 
-## Example notebooks
-
-- [Python API Examples](examples/hydroswift_python_examples.ipynb) — full end-to-end workflows
-- [CLI Examples](examples/hydroswift_cli_examples.ipynb) — `hyswift` command demonstrations
-
 ## Important usage rules
 
 !!! note
-    - Use `hydroswift.wris.download(...)` / `hydroswift.cwc.download(...)` for **explicit values only** (no DataFrames).
-    - Use `hydroswift.fetch(table, ...)` for tables from `hydroswift.wris.stations(...)`, `hydroswift.cwc.stations(...)`, etc.
-    - CWC downloads include water level.
-    - Discharge is generated from GUARDIAN RC coefficients in `swift_app/RC.csv` when requested/available (Patidar et al., 2024, <https://doi.org/10.1038/s41597-024-03923-8>).
+    - CWC discharge exists only as a rating-curve estimate from stage, using GUARDIAN RC coefficients in `swift_app/RC.csv` (Patidar et al., 2024, <https://doi.org/10.1038/s41597-024-03923-8>). It is labelled `rc_guardian_2024` in the `method` column.
+    - NWDP has no server-side date filter, so the period is applied after download; resources whose name states a period outside the request are skipped.
+    - Every fetch writes `manifest.json` (query, per-source status, endpoints, record counts, actual date spans, TLS verification setting).
 
-## Output model
-
-Downloaded station files are saved under an output directory, then optionally:
-
-- merged into GeoPackages with `merge=True` or `hydroswift.merge_only(...)`
-- plotted with `plot=True` or `hydroswift.plot_only(...)`
-
-Post-processing helpers work from existing downloaded files without requiring basin/station arguments again.
+!!! warning "Example notebooks"
+    The notebooks in `docs/examples/` were written for the removed `wris`/`cwc` interfaces and have not yet been updated to the new workflow.

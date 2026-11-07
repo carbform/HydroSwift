@@ -1,273 +1,258 @@
-"""Command-line parsing for HydroSwift."""
+"""HydroSwift command line: search -> get -> show / merge / plot.
+
+    hyswift search rainfall --where Karnataka --period 2020:2022 --save cat.json
+    hyswift get --from cat.json --rows 1,3 --period 2020:2022 --out output
+    hyswift show output            # tidy summary of what was fetched
+    hyswift merge output all.parquet
+    hyswift plot output plots/
+    hyswift                        # guided prompts
+"""
 
 from __future__ import annotations
 
 import argparse
 import time
-from collections import OrderedDict
 
-DATASETS = OrderedDict(
-    {
-        "q": ("DISCHARG", "discharge"),
-        "wl": ("WATERLVL", "water_level"),
-        "atm": ("PRESS", "atm_pressure"),
-        "rf": ("RAINF", "rainfall"),
-        "temp": ("MT_TEMP", "temperature"),
-        "rh": ("HUMID", "humidity"),
-        "solar": ("SOLAR_RD", "solar_radiation"),
-        "sed": ("SEDIM", "sediment"),
-        "gwl": ("GWATERLVL", "groundwater_level"),
-    }
-)
-
-WRIS_BASINS = OrderedDict(
-    {
-        "1": "Brahmani and Baitarni",
-        "2": "Cauvery",
-        "3": "East flowing rivers between Mahanadi and Pennar",
-        "4": "East flowing rivers between Pennar and Kanyakumari",
-        "5": "Godavari",
-        "6": "Krishna",
-        "7": "Mahanadi",
-        "8": "Mahi",
-        "9": "Minor rivers draining into Myanmar and Bangladesh",
-        "10": "Narmada",
-        "11": "Pennar",
-        "12": "Sabarmati",
-        "13": "Subernarekha",
-        "14": "Tapi",
-        "15": "West flowing rivers from Tadri to Kanyakumari",
-        "16": "West flowing rivers from Tapi to Tadri",
-        "17": "West flowing rivers of Kutch and Saurashtra including Luni",
-    }
-)
-
-# Map dataset codes to short column names for the value column
-DATASET_COLUMNS = {
-    "DISCHARG": "q",
-    "WATERLVL": "wl",
-    "PRESS": "atm",
-    "RAINF": "rf",
-    "MT_TEMP": "temp",
-    "HUMID": "rh",
-    "SOLAR_RD": "solar",
-    "SEDIM": "sed",
-    "GWATERLVL": "gwl",
-}
+from . import APP_NAME, APP_TAGLINE, VERSION
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build argument parser for the HydroSwift CLI."""
-    parser = argparse.ArgumentParser(
+    p = argparse.ArgumentParser(
         prog="hyswift",
-        description=(
-            "HydroSwift - Fast, unified workflows for hydrological data\n\n"
-            "Download hydrological datasets from India-WRIS and CWC."
-        ),
-        formatter_class=argparse.RawTextHelpFormatter,
+        description=f"{APP_NAME} - {APP_TAGLINE}\n\nWorkflow: search -> get -> show / merge / plot (run `hyswift` alone for guided mode).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    p.add_argument("--version", action="version", version=f"HydroSwift {VERSION}")
+    sub = p.add_subparsers(dest="command")
 
-    from . import VERSION
+    s = sub.add_parser("search", help="Find datasets/stations across sources")
+    s.add_argument("query", nargs="?", help="variable or keyword, e.g. rainfall, discharge")
+    s.add_argument("--where", dest="location", help="substring of organization/basin/state/district/river")
+    s.add_argument("--basin", help="exact CWC basin name")
+    s.add_argument("--state", help="exact CWC state name")
+    s.add_argument("--ids", help="comma-separated catalog IDs (exact)")
+    s.add_argument("--source", action="append", dest="sources", choices=["NWDP", "CWC", "CWC-RSMS"],
+                   help="restrict to a source (repeatable)")
+    s.add_argument("--period", help="YYYY:YYYY or YYYY-MM-DD:YYYY-MM-DD")
+    s.add_argument("--estimate", action="store_true", help="add record counts (NWDP only; one request per row)")
+    s.add_argument("--save", help="write the catalog + provenance to this JSON file")
+    s.add_argument("--limit", type=int, default=40, help="rows to print (default 40)")
 
-    parser.add_argument("--version", action="version", version=f"HydroSwift {VERSION}")
+    g = sub.add_parser("get", help="Download rows of a saved catalog")
+    g.add_argument("--from", dest="catalog", required=True, help="catalog JSON from `search --save`")
+    g.add_argument("--rows", help="row numbers to download, e.g. 0,2,5 (default: all)")
+    g.add_argument("--period", help="YYYY:YYYY or YYYY-MM-DD:YYYY-MM-DD")
+    g.add_argument("--out", default="output", help="output directory")
+    g.add_argument("--format", choices=["csv", "xlsx", "json"], default="csv")
+    g.add_argument("--overwrite", action="store_true")
+    g.add_argument("--no-rc-discharge", action="store_true", help="CWC: stage only, no rating-curve discharge")
 
-    basin_help = "WRIS basin name or number:\n"
-    for num, name in WRIS_BASINS.items():
-        basin_help += f"  [{num}] {name}\n"
+    sh = sub.add_parser("show", help="Summarise fetched data (tidy view)")
+    sh.add_argument("path", help="output directory or manifest*.json")
 
-    source = parser.add_argument_group("Source selection")
-    source.add_argument("-b", "--basin", help=basin_help)
-    source.add_argument(
-        "--cwc",
-        action="store_true",
-        help="Use CWC source (Python equivalent: hydroswift.cwc.download(...))",
-    )
-    source.add_argument(
-        "--nwdp-resource",
-        dest="nwdp_resource",
-        help="NWDP resource ID (Python equivalent: hydroswift.nwdp.download(resource_id=...))",
-    )
-    source.add_argument(
-        "--nwdp-state",
-        "--nwdp-org",
-        dest="nwdp_org",
-        help="NWDP State / Organization Name (e.g. 'Karnataka')",
-    )
-    source.add_argument(
-        "--nwdp-group",
-        dest="nwdp_group",
-        help="NWDP Group ID/Name (e.g. 'water-quantity')",
-    )
-    source.add_argument(
-        "--nwdp-query",
-        dest="nwdp_query",
-        help="NWDP Search query (e.g. 'Ground Water')",
-    )
-    source.add_argument(
-        "--nwdp-filters",
-        dest="nwdp_filters",
-        help="NWDP filters as JSON string (e.g. '{\"State\":\"Karnataka\"}')",
-    )
-    source.add_argument(
-        "--cwc-station",
-        "--station",
-        dest="cwc_station",
-        nargs="+",
-        help="CWC station code(s) (Python equivalent: station=[...])",
-    )
-    source.add_argument(
-        "--cwc-basin",
-        dest="cwc_basin_filter",
-        nargs="+",
-        help="CWC basin filter(s) (Python equivalent: basin=[...])",
-    )
-    source.add_argument(
-        "--cwc-refresh",
-        action="store_true",
-        default=False,
-        help="Refresh CWC station metadata from the live API before download.",
-    )
+    m = sub.add_parser("merge", help="Merge fetched data into one csv/parquet/gpkg")
+    m.add_argument("path")
+    m.add_argument("output")
 
-    datasets = parser.add_argument_group("WRIS variables")
-    datasets.add_argument("-q", "--discharge", dest="q", action="store_true", help="Discharge")
-    datasets.add_argument("-wl", "--water-level", dest="wl", action="store_true", help="Water level")
-    datasets.add_argument("-atm", "--atm-pressure", dest="atm", action="store_true", help="Atmospheric pressure")
-    datasets.add_argument("-rf", "--rainfall", dest="rf", action="store_true", help="Rainfall")
-    datasets.add_argument("-temp", "--temperature", dest="temp", action="store_true", help="Temperature")
-    datasets.add_argument("-rh", "--humidity", dest="rh", action="store_true", help="Relative humidity")
-    datasets.add_argument("-solar", "--solar-radiation", dest="solar", action="store_true", help="Solar radiation")
-    datasets.add_argument("-sed", "--sediment", dest="sed", action="store_true", help="Suspended sediment")
-    datasets.add_argument("-gwl", "--groundwater-level", dest="gwl", action="store_true", help="Groundwater level")
+    pl = sub.add_parser("plot", help="Plot fetched data")
+    pl.add_argument("path")
+    pl.add_argument("output_dir", nargs="?", default="output/plots")
+    pl.add_argument("--variable")
 
-    download = parser.add_argument_group("Download behavior")
-    download.add_argument("--overwrite", action="store_true", help="Overwrite existing files")
-    download.add_argument("--merge", action="store_true", help="Merge station files into GeoPackages")
-    download.add_argument(
-        "--merge-only",
-        action="store_true",
-        help="Only merge existing output (Python equivalent: hydroswift.merge_only(...))",
-    )
-    download.add_argument(
-        "--swot-merge",
-        dest="swot_merge",
-        action="store_true",
-        help=(
-            "Build SWOT-ready merged GeoPackage from existing HydroSwift output. "
-            "Reads cwc/ and wris/ GPKGs under --output-dir, enriches with station metadata, "
-            "and writes a unified wris_merged.gpkg (Python equivalent: hydroswift.swot_merge(...))"
-        ),
-    )
-    download.add_argument(
-        "--swot-output",
-        dest="swot_output",
-        default=None,
-        help="Destination GeoPackage for --swot-merge (default: <output-dir>/wris_merged.gpkg)",
-    )
-    download.add_argument("--delay", type=float, default=0.25, help="Delay between WRIS API requests (seconds)")
-    download.add_argument("--start-date", default="1950-01-01", help="Start date (YYYY-MM-DD)")
-    download.add_argument("--end-date", default=time.strftime("%Y-%m-%d"), help="End date (YYYY-MM-DD)")
-    download.add_argument(
-        "--cwc-rc-discharge",
-        dest="cwc_rc_discharge",
-        action="store_true",
-        default=True,
-        help="Enable RC-based discharge generation in CWC mode (default: enabled).",
-    )
-    download.add_argument(
-        "--no-cwc-rc-discharge",
-        dest="cwc_rc_discharge",
-        action="store_false",
-        help="Disable RC-based discharge generation in CWC mode.",
-    )
+    r = sub.add_parser("rsms", help="CWC reservoir tools (RSMS)")
+    rs = r.add_subparsers(dest="rsms_command", required=True)
+    d = rs.add_parser("daily", help="Latest-day storage snapshot for all monitored reservoirs")
+    d.add_argument("--out", default="output/cwc_rsms/daily_snapshot.csv", help="CSV to create or append to")
+    b = rs.add_parser("backfill", help="Download and parse historical weekly bulletins")
+    b.add_argument("--start", default="2025-05-15")
+    b.add_argument("--end")
+    b.add_argument("--out", default="output/cwc_rsms/bulletin_backfill.csv")
+    b.add_argument("--bulletin-dir", default="output/cwc_rsms/bulletins")
+    bd = rs.add_parser("build", help="Build unified SWOT + in-situ reservoir database")
+    bd.add_argument("--reservoir-shp", required=True)
+    bd.add_argument("--swot-db", required=True)
+    bd.add_argument("--gauge-cache", required=True)
+    bd.add_argument("--out-dir", default="output/reservoir_geodb")
 
-    reservoirs = parser.add_argument_group("CWC Reservoirs & RSMS")
-    reservoirs.add_argument(
-        "--rsms-daily",
-        "--cwc-reservoir-daily",
-        dest="rsms_daily",
-        action="store_true",
-        help="Fetch today's real-time daily reservoir storage & level snapshot from CWC RSMS.",
-    )
-    reservoirs.add_argument(
-        "--rsms-bulletins",
-        "--cwc-reservoir-bulletins",
-        dest="rsms_bulletins",
-        action="store_true",
-        help="Download and parse historical CWC weekly bulletin reports from RSMS.",
-    )
-    reservoirs.add_argument(
-        "--rsms-backfill",
-        dest="rsms_backfill",
-        action="store_true",
-        help="Perform backfill of CWC reservoir bulletin time series.",
-    )
-    reservoirs.add_argument(
-        "--swot-reservoir-merge",
-        "--reservoir-merge",
-        dest="swot_reservoir_merge",
-        action="store_true",
-        help="Build unified SWOT & in-situ reservoir GeoPackage, SQLite, and Parquet artifacts.",
-    )
-    reservoirs.add_argument(
-        "--reservoir-shp",
-        dest="reservoir_shp",
-        default=None,
-        help="Path to reservoir polygon shapefile or GeoPackage for --swot-reservoir-merge.",
-    )
-    reservoirs.add_argument(
-        "--swot-db",
-        dest="swot_db",
-        default=None,
-        help="Path to SWOT observations SQLite DB for --swot-reservoir-merge.",
-    )
-    reservoirs.add_argument(
-        "--gauge-cache",
-        dest="gauge_cache",
-        default=None,
-        help="Directory or CSV file of in-situ gauge records for --swot-reservoir-merge.",
-    )
-    reservoirs.add_argument(
-        "--unified-output-dir",
-        dest="unified_output_dir",
-        default=None,
-        help="Directory to save unified reservoir GPKG, SQLite, and Parquet artifacts.",
-    )
-
-    output = parser.add_argument_group("Output options")
-    output.add_argument("--metadata", action="store_true", help="Save station metadata as CSV")
-    output.add_argument("--input-dir", help="Input directory for --merge-only / --plot-only")
-    output.add_argument("--plot", action="store_true", help="Generate plots after download")
-    output.add_argument(
-        "--plot-svg",
-        action="store_true",
-        help="Also export publication-ready SVG files when plotting",
-    )
-    output.add_argument(
-        "--plot-moving-average-window",
-        type=int,
-        default=None,
-        help="Optional moving-average window (number of samples) overlay for plots",
-    )
-    output.add_argument("--plot-only", action="store_true", help="Generate plots from existing output")
-    output.add_argument("--output-dir", default="output", help="Output directory (default: output)")
-    output.add_argument("--format", choices=["csv", "xlsx"], default="csv", help="Output file format")
-
-    misc = parser.add_argument_group("Misc")
-    misc.add_argument(
-        "--gui", action="store_true", help="Launch the HydroSwift Graphical User Interface (Native Desktop App)"
-    )
-    misc.add_argument("--quiet", action="store_true", help="Suppress console output")
-    misc.add_argument("--list", action="store_true", help="List available WRIS basins and CWC station count")
-    misc.add_argument("--cite", action="store_true", help="Show citation information")
-    misc.add_argument("--coffee", action="store_true", help="Take a virtual coffee break ☕")
-
-    return parser
+    sub.add_parser("cite", help="Show citation")
+    sub.add_parser("coffee", help="Take a coffee break")
+    return p
 
 
-def selected_datasets(args: argparse.Namespace) -> dict[str, str]:
-    """Map selected CLI flags to WRIS dataset code => output folder."""
-    selected: dict[str, str] = {}
-    for key, (dataset_code, folder_name) in DATASETS.items():
-        if getattr(args, key):
-            selected[dataset_code] = folder_name
-    return selected
+def _print_catalog(df, limit):
+    import pandas as pd
+    cols = ["Source", "Title", "Location", "Variable", "Resolution", "CoverageStart", "CoverageEnd", "ID"]
+    cols += [c for c in ("EstRecords",) if c in df.columns]
+    with pd.option_context("display.width", 200, "display.max_colwidth", 48):
+        print(df[cols].head(limit).to_string())
+    if len(df) > limit:
+        print(f"... {len(df) - limit} more rows (use --save to keep all)")
+
+
+def print_status(df):
+    for st in df.attrs.get("source_status", []):
+        bits = []
+        if not st["ok"]:
+            bits.append(f"FAILED: {st['error']}")
+        elif not st["complete"]:
+            bits.append(f"PARTIAL: {st['error']}")
+        else:
+            bits.append(f"ok, {st['rows']} rows")
+        if st.get("dropped"):
+            bits.append("dropped " + ", ".join(f"{k}={v}" for k, v in st["dropped"].items()))
+        if st.get("note"):
+            bits.append(st["note"])
+        print(f"  {st['source']:9s} " + " | ".join(bits))
+    if df.attrs.get("partial"):
+        print("  !! the listing is PARTIAL; some sources failed or were truncated")
+
+
+def _rows(spec, n):
+    if not spec:
+        return list(range(n))
+    out = []
+    for part in spec.split(","):
+        part = part.strip()
+        if "-" in part:
+            a, b = part.split("-", 1)
+            out.extend(range(int(a), int(b) + 1))
+        elif part:
+            out.append(int(part))
+    bad = [i for i in out if i < 0 or i >= n]
+    if bad:
+        raise SystemExit(f"row(s) {bad} out of range (catalog has {n} rows, numbered from 0)")
+    return out
+
+
+def run(args) -> int:
+    from . import api
+
+    cmd = args.command
+    if cmd == "search":
+        ids = [x for x in (args.ids or "").split(",") if x.strip()] or None
+        df = api.search(args.query, args.location, sources=args.sources, period=args.period,
+                        ids=ids, basin=args.basin, state=args.state)
+        if args.estimate:
+            df = api.estimate(df)
+        print("Sources:")
+        print_status(df)
+        if df.empty:
+            print("No rows.")
+        else:
+            _print_catalog(df, args.limit)
+            n_inf = int(df["Inferred"].astype(str).ne("").sum())
+            print(f"\n{len(df)} rows. 'Inferred' fields (not stated by the source) are listed per row in the saved catalog; {n_inf} rows have some.")
+        if args.save:
+            print("Saved:", api.save_catalog(df, args.save))
+        return 1 if (df.empty and df.attrs.get("partial")) else 0
+
+    if cmd == "get":
+        cat = api.load_catalog(args.catalog)
+        sel = cat.iloc[_rows(args.rows, len(cat))]
+        sel.attrs.update(cat.attrs)
+
+        def progress(e):
+            if e["event"] == "item_start":
+                print(f"[{e['index']}/{e['total']}] {e['source']}: {e['title']}")
+            elif e["event"] == "item_done":
+                print(f"    -> {e['status']} ({e['records']} records)")
+        res = api.fetch(sel, output_dir=args.out, period=args.period, format=args.format,
+                        overwrite=args.overwrite, rc_discharge=not args.no_rc_discharge, progress=progress)
+        print("Manifest:", res.attrs.get("manifest"))
+        return 1 if (res["status"] == "error").any() else 0
+
+    if cmd == "show":
+        df = api.load(args.path)
+        if df.empty:
+            print("No tidy data.")
+        else:
+            g = df.groupby(["source", "variable", "unit", "method"], dropna=False).agg(
+                rows=("value", "size"), stations=("station_id", "nunique"),
+                start=("time", "min"), end=("time", "max"))
+            print(g.to_string())
+        for u in df.attrs.get("unmapped", []):
+            print(f"UNMAPPED {u['file']}: {u['reason']}")
+        return 0
+
+    if cmd == "merge":
+        df = api.merge(args.path, args.output)
+        print(f"Wrote {len(df)} rows to {args.output}")
+        return 0
+
+    if cmd == "plot":
+        paths = api.plot(args.path, args.output_dir, variable=args.variable)
+        print(f"Wrote {len(paths)} figures to {args.output_dir}")
+        return 0
+
+    if cmd == "rsms":
+        c = args.rsms_command
+        if c == "daily":
+            df = api.rsms.daily(output_path=args.out)
+            print(f"{len(df)} reservoirs -> {args.out}")
+        elif c == "backfill":
+            df = api.rsms.backfill(start_date=args.start, end_date=args.end,
+                                   output_csv=args.out, bulletin_dir=args.bulletin_dir)
+            print(f"{len(df)} rows -> {args.out}")
+        else:
+            from pathlib import Path
+            o = Path(args.out_dir)
+            o.mkdir(parents=True, exist_ok=True)
+            res = api.rsms.build_database(
+                reservoir_shp=args.reservoir_shp, swot_observations=args.swot_db,
+                gauge_source=args.gauge_cache,
+                output_gpkg=o / "unified_reservoir_swot_gauge.gpkg",
+                output_sqlite=o / "unified_reservoir_swot_gauge.sqlite",
+                output_parquet=o / "unified_reservoir_timeseries.parquet")
+            print(res)
+        return 0
+
+    if cmd == "cite":
+        api.cite()
+        return 0
+    if cmd == "coffee":
+        api.coffee()
+        return 0
+    return 2
+
+
+def guided() -> int:
+    """Interactive Find -> Review -> Get, asking for the data first and the source never."""
+    from . import api
+    print("HydroSwift guided mode (press Enter to skip a question)")
+    q = input("Variable (e.g. rainfall, discharge, groundwater): ").strip() or None
+    loc = input("Place (state, basin, organization): ").strip() or None
+    per = input("Period (YYYY:YYYY): ").strip() or None
+    df = api.search(q, loc, period=per)
+    print("Sources:")
+    print_status(df)
+    if df.empty:
+        print("Nothing found.")
+        return 1
+    _print_catalog(df, 40)
+    pick = input("Rows to download (e.g. 0,2-4; Enter for none): ").strip()
+    if not pick:
+        return 0
+    sel = df.iloc[_rows(pick, len(df))]
+    sel.attrs.update(df.attrs)
+    out = input("Output directory [output]: ").strip() or "output"
+    res = api.fetch(sel, output_dir=out, period=per)
+    print(res[["source", "title", "status", "records", "start", "end"]].to_string())
+    print("Manifest:", res.attrs.get("manifest"))
+    return 0
+
+
+def main(argv=None) -> int:
+    import sys
+    parser = build_parser()
+    raw = sys.argv[1:] if argv is None else list(argv)
+    if any(a in ("-h", "--help", "--version") for a in raw[:1]) or not raw or raw[:1] == ["cite"]:
+        from .banner import print_wish_banner
+        print_wish_banner()
+    args = parser.parse_args(argv)
+    if not args.command:
+        import sys
+        if sys.stdin.isatty():
+            return guided()
+        parser.print_help()
+        return 0
+    return run(args)

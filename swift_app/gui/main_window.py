@@ -25,7 +25,6 @@ from PyQt5.QtCore import Qt, pyqtSignal, QThreadPool, QTimer
 from PyQt5.QtGui import QIcon, QFont
 
 from .panels import (
-    CWCDownloadPanel,
     UnifiedDiscoveryPanel,
     DownloadConfigPanel,
     ResultsViewerPanel,
@@ -46,7 +45,7 @@ class HydroSwiftGUI(QMainWindow):
         """Initialize the HydroSwift GUI main window."""
         super().__init__(parent)
         
-        self.setWindowTitle("HydroSwift ⚡ - Hydrological Data Retrieval")
+        self.setWindowTitle("HydroSwift  - Hydrological Data Retrieval")
         self.setGeometry(100, 100, 1400, 900)
         
         # Thread pool for background tasks
@@ -78,19 +77,15 @@ class HydroSwiftGUI(QMainWindow):
         
         # Tab 1: Unified Discovery & Download
         self.unified_panel = UnifiedDiscoveryPanel()
-        self.tab_widget.addTab(self.unified_panel, "🌐 Unified Search")
-        
-        # Tab 3: CWC Download
-        self.cwc_panel = CWCDownloadPanel()
-        self.tab_widget.addTab(self.cwc_panel, "💧 Expert: CWC")
+        self.tab_widget.addTab(self.unified_panel, "Unified Search")
         
         # Tab 3: Download Configuration
         self.config_panel = DownloadConfigPanel()
-        self.tab_widget.addTab(self.config_panel, "⚙️ Configuration")
+        self.tab_widget.addTab(self.config_panel, "Configuration")
         
         # Tab 4: Results & Plotting
         self.results_panel = ResultsViewerPanel()
-        self.tab_widget.addTab(self.results_panel, "📈 Results")
+        self.tab_widget.addTab(self.results_panel, "Results")
         
         # Logger widget at bottom
         logger_label = QLabel("Execution Log:")
@@ -166,18 +161,15 @@ class HydroSwiftGUI(QMainWindow):
         
         # Wire panels to status updates
         self.unified_panel.status_changed.connect(self._update_status)
-        self.cwc_panel.status_changed.connect(self._update_status)
         self.config_panel.status_changed.connect(self._update_status)
         
         # Wire log messages
         self.unified_panel.log_message.connect(self.logger_widget.append_log)
-        self.cwc_panel.log_message.connect(self.logger_widget.append_log)
         self.config_panel.log_message.connect(self.logger_widget.append_log)
         self.results_panel.log_message.connect(self.logger_widget.append_log)
         
         # Wire download completion
         self.unified_panel.download_completed.connect(self._on_download_completed)
-        self.cwc_panel.download_completed.connect(self._on_download_completed)
 
     def _update_status(self, message: str) -> None:
         """Update the status bar message."""
@@ -186,7 +178,7 @@ class HydroSwiftGUI(QMainWindow):
     def _on_download_completed(self, result: dict) -> None:
         """Handle download completion."""
         self.logger_widget.append_log(
-            f"✓ Download completed: {result.get('files_saved', 0)} files saved",
+            f"Download completed: {result.get('files_saved', 0)} files saved",
             level="success"
         )
         
@@ -227,7 +219,6 @@ class HydroSwiftGUI(QMainWindow):
         
         # Update panels with new settings
         self.wris_panel.set_output_dir(self.output_dir)
-        self.cwc_panel.set_output_dir(self.output_dir)
 
         # Update configuration panel UI if present
         try:
@@ -254,7 +245,7 @@ class HydroSwiftGUI(QMainWindow):
         QMessageBox.about(
             self,
             "About HydroSwift",
-            """<b>HydroSwift ⚡ v1.0.0</b>
+            """<b>HydroSwift  v1.0.0</b>
             
 <p>Fast, unified workflows for hydrological data retrieval.</p>
 

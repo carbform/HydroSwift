@@ -82,15 +82,15 @@ class LoggerWidget(QTextEdit):
 
     def success(self, message: str) -> None:
         """Append a success message."""
-        self.append_log(f"✓ {message}", "success")
+        self.append_log(f" {message}", "success")
 
     def error(self, message: str) -> None:
         """Append an error message."""
-        self.append_log(f"✗ {message}", "error")
+        self.append_log(f" {message}", "error")
 
     def warning(self, message: str) -> None:
         """Append a warning message."""
-        self.append_log(f"⚠ {message}", "warning")
+        self.append_log(f" {message}", "warning")
 
     def info(self, message: str) -> None:
         """Append an info message."""

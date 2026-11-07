@@ -184,13 +184,13 @@ def tidy_nwdp(df: pd.DataFrame, title: str, file: str):
     return out[TIDY_COLUMNS], None
 
 
-def tidy_cwc(df: pd.DataFrame, file: str):
+def tidy_cwc(df: pd.DataFrame, file: str, name=None):
     """CWC FFS files: wse (m) and discharge (m3/s)."""
     if "time" not in df.columns:
         return None, "no time column"
     t = pd.to_datetime(df["time"], errors="coerce")
     parts = []
-    base = {"station_id": df.get("station_code"), "station_name": None, "source": "CWC",
+    base = {"station_id": df.get("station_code"), "station_name": name, "source": "CWC",
             "lat": df.get("lat"), "lon": df.get("lon"), "file": file}
     if "wse" in df.columns:
         parts.append(pd.DataFrame({**base, "time": t, "value": pd.to_numeric(df["wse"], errors="coerce"),
@@ -224,7 +224,14 @@ def tidy_rsms(df: pd.DataFrame, file: str):
 
 
 def _read_with_header(path: Path) -> pd.DataFrame:
-    return pd.read_csv(path, comment="#", low_memory=False)
+    ext = path.suffix.lower()
+    if ext == ".csv":
+        return pd.read_csv(path, comment="#", low_memory=False)
+    if ext == ".xlsx":
+        return pd.read_excel(path, sheet_name="timeseries")
+    if ext == ".json":
+        return pd.read_json(path, orient="records", convert_dates=False)
+    raise ValueError(f"{ext} not supported by load(); use csv, xlsx or json")
 
 
 def load(run) -> pd.DataFrame:
@@ -256,14 +263,12 @@ def load(run) -> pd.DataFrame:
             unmapped.append({"file": str(path), "reason": "file missing"})
             continue
         try:
-            if path.suffix.lower() != ".csv":
-                raise ValueError(f"{path.suffix} not supported by load(); use csv")
             raw = _read_with_header(path)
             src = it.get("source")
             if src == "NWDP":
                 out, why = tidy_nwdp(raw, str(it.get("title", "")), str(path))
             elif src == "CWC":
-                out, why = tidy_cwc(raw, str(path))
+                out, why = tidy_cwc(raw, str(path), str(it.get("title")) if it.get("title") else None)
             elif src == "CWC-RSMS":
                 out, why = tidy_rsms(raw, str(path))
             else:

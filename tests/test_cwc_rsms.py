@@ -41,16 +41,12 @@ def test_clean_reservoir_name():
 
 
 def test_cwc_reservoirs_namespace_public_api():
-    """Verify that hydroswift.cwc.reservoirs and hydroswift.rsms are exported and callable."""
-    assert hasattr(hydroswift.cwc, "reservoirs")
+    """Verify that hydroswift.rsms and its cwc_reservoirs alias are exported and callable."""
     assert hasattr(hydroswift, "rsms")
     assert hasattr(hydroswift, "swot_reservoir_merge")
 
     # Verify namespace methods
-    assert callable(hydroswift.cwc.reservoirs.daily)
-    assert callable(hydroswift.cwc.reservoirs.bulletins)
-    assert callable(hydroswift.cwc.reservoirs.backfill)
-    assert callable(hydroswift.cwc.reservoirs.build_database)
+    assert hydroswift.cwc_reservoirs is hydroswift.rsms
 
     assert callable(hydroswift.rsms.daily)
     assert callable(hydroswift.rsms.bulletins)
@@ -58,18 +54,18 @@ def test_cwc_reservoirs_namespace_public_api():
     assert callable(hydroswift.rsms.build_database)
 
 
-def test_cli_flags_present():
-    """Verify that CLI parser includes RSMS and reservoir merge flags."""
+def test_cli_rsms_subcommands_present():
+    """The reservoir tools stay reachable from the CLI as `hyswift rsms ...`."""
     parser = build_parser()
-    actions = {a.dest: a for a in parser._actions}
-
-    assert "rsms_daily" in actions
-    assert "rsms_bulletins" in actions
-    assert "rsms_backfill" in actions
-    assert "swot_reservoir_merge" in actions
-    assert "reservoir_shp" in actions
-    assert "swot_db" in actions
-    assert "gauge_cache" in actions
+    a = parser.parse_args(["rsms", "daily"])
+    assert (a.command, a.rsms_command) == ("rsms", "daily")
+    a = parser.parse_args(["rsms", "backfill", "--start", "2025-06-01"])
+    assert a.start == "2025-06-01"
+    a = parser.parse_args(["rsms", "build", "--reservoir-shp", "r.shp", "--swot-db", "s.db", "--gauge-cache", "g"])
+    assert (a.reservoir_shp, a.swot_db, a.gauge_cache) == ("r.shp", "s.db", "g")
+    import pytest
+    with pytest.raises(SystemExit):
+        parser.parse_args(["rsms", "build"])  # all three inputs are required
 
 
 def test_anomaly_correction_in_builder(tmp_path):

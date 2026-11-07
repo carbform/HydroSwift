@@ -54,207 +54,6 @@ class WorkerThread(QThread):
             self.finished.emit()
 
 
-class CWCDownloadPanel(QWidget):
-    """Panel for CWC (Central Water Commission) data download."""
-    
-    status_changed = pyqtSignal(str)
-    log_message = pyqtSignal(str, str)
-    download_completed = pyqtSignal(dict)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.output_dir = Path("output")
-        self.selected_stations = []
-        
-        self._setup_ui()
-
-    def _setup_ui(self) -> None:
-        """Setup the CWC download panel UI."""
-        
-        layout = QVBoxLayout()
-        self.setLayout(layout)
-        
-        # Title
-        title = QLabel("CWC (Central Water Commission Flood Forecasting System)")
-        title_font = QFont()
-        title_font.setPointSize(12)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        layout.addWidget(title)
-        
-        # Selection group
-        select_group = self._create_selection_group()
-        layout.addWidget(select_group)
-        
-        # Stations list
-        layout.addWidget(QLabel("Available Stations:"))
-        self.stations_list = QListWidget()
-        self._load_cwc_stations()
-        layout.addWidget(self.stations_list)
-        
-        # Download controls
-        download_layout = QHBoxLayout()
-        
-        self.download_btn = QPushButton("⬇️ Download Selected Stations")
-        self.download_btn.clicked.connect(self._start_download)
-        download_layout.addWidget(self.download_btn)
-        
-        self.merge_checkbox = QCheckBox("Merge files after download")
-        self.merge_checkbox.setChecked(True)
-        download_layout.addWidget(self.merge_checkbox)
-        
-        download_layout.addStretch()
-        layout.addLayout(download_layout)
-        
-        # Progress
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        layout.addWidget(self.progress_bar)
-
-    def _create_selection_group(self) -> QGroupBox:
-        """Create station selection group."""
-        
-        group = QGroupBox("Station Selection")
-        layout = QGridLayout()
-        
-        # Basin filter
-        layout.addWidget(QLabel("Basin (Optional):"), 0, 0)
-        self.basin_combo = QComboBox()
-        self.basin_combo.addItem("All Basins")
-        self.basin_combo.addItems(["Krishna", "Godavari", "Narmada", "Mahanadi"])
-        layout.addWidget(self.basin_combo, 0, 1)
-        
-        # Refresh metadata button
-        refresh_btn = QPushButton("🔄 Refresh Metadata")
-        refresh_btn.clicked.connect(self._refresh_metadata)
-        layout.addWidget(refresh_btn, 0, 2)
-        
-        group.setLayout(layout)
-        return group
-
-    def _load_cwc_stations(self) -> None:
-        """Load CWC stations list."""
-        if HYDROSWIFT_AVAILABLE:
-            try:
-                stations = hydroswift.cwc.stations()
-                if isinstance(stations, pd.DataFrame):
-                    for idx, row in stations.iterrows():
-                        code = row.get('code', '')
-                        name = row.get('station_name', '')
-                        basin = row.get('basin', '')
-                        
-                        item_text = f"{code} - {name} ({basin})"
-                        item = QListWidgetItem(item_text)
-                        item.setData(Qt.UserRole, code)
-                        self.stations_list.addItem(item)
-            except Exception as e:
-                self.log_message.emit(f"Error loading CWC stations: {str(e)}", "error")
-        else:
-            # Fallback with sample stations
-            for station in ["040-CDJAPR", "032-LGDHYD", "043-GODAVARI", "041-KRISHNA"]:
-                item = QListWidgetItem(station)
-                item.setData(Qt.UserRole, station)
-                self.stations_list.addItem(item)
-
-    def _refresh_metadata(self) -> None:
-        """Refresh CWC metadata."""
-        self.status_changed.emit("Refreshing CWC metadata...")
-        
-        if HYDROSWIFT_AVAILABLE:
-            try:
-                hydroswift.cwc.refresh_metadata(write=False)
-                self.log_message.emit("✓ Metadata refreshed", "success")
-                self._load_cwc_stations()
-            except Exception as e:
-                self.log_message.emit(f"Error refreshing metadata: {str(e)}", "error")
-
-    def _start_download(self) -> None:
-        """Start downloading selected CWC stations."""
-        selected_items = self.stations_list.selectedItems()
-        
-        if not selected_items:
-            QMessageBox.warning(self, "Error", "Please select at least one station")
-            return
-        
-        stations = [item.data(Qt.UserRole) for item in selected_items]
-        
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setMaximum(0)
-        self.status_changed.emit(f"Downloading {len(stations)} CWC stations...")
-        
-        # Prefer output directory from the Download Configuration panel if available
-        out_dir = self.output_dir
-        try:
-            main_win = self.window()
-            if hasattr(main_win, "config_panel") and main_win.config_panel:
-                cfg = main_win.config_panel.get_config()
-                od = cfg.get("output_dir")
-                if od:
-                    out_dir = Path(od)
-        except Exception:
-            out_dir = self.output_dir
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-        self.output_dir = out_dir
-
-        worker = WorkerThread(
-            self._download_worker,
-            stations,
-            out_dir,
-            self.merge_checkbox.isChecked()
-        )
-        worker.result_ready.connect(self._on_download_complete)
-        worker.error.connect(self._on_download_error)
-        worker.start()
-
-    def _download_worker(
-        self,
-        stations: List[str],
-        output_dir: Path,
-        merge: bool
-    ) -> dict:
-        """Worker function for CWC download."""
-        try:
-            result = hydroswift.cwc.download(
-                station=stations,
-                merge=merge,
-                output_dir=str(output_dir),
-                overwrite=False
-            )
-            
-            return {
-                "success": True,
-                "files_saved": len(stations),
-                "output_dir": str(output_dir)
-            }
-        except Exception as e:
-            raise Exception(f"CWC download failed: {str(e)}")
-
-    @pyqtSlot(dict)
-    def _on_download_complete(self, result: dict) -> None:
-        """Handle download completion."""
-        self.progress_bar.setVisible(False)
-        self.status_changed.emit("CWC download completed")
-        
-        self.log_message.emit(
-            f"✓ Downloaded {result.get('files_saved')} CWC stations",
-            "success"
-        )
-        self.download_completed.emit(result)
-
-    @pyqtSlot(str)
-    def _on_download_error(self, error: str) -> None:
-        """Handle download error."""
-        self.progress_bar.setVisible(False)
-        self.status_changed.emit("CWC download failed")
-        self.log_message.emit(error, "error")
-        QMessageBox.critical(self, "CWC Download Error", error)
-
-    def set_output_dir(self, output_dir: Path) -> None:
-        """Set the output directory."""
-        self.output_dir = output_dir
-
-
 class DownloadConfigPanel(QWidget):
     """Panel for configuring download parameters."""
     
@@ -440,15 +239,15 @@ class ResultsViewerPanel(QWidget):
         # Controls
         controls_layout = QHBoxLayout()
         
-        refresh_btn = QPushButton("🔄 Refresh Results")
+        refresh_btn = QPushButton("Refresh Results")
         refresh_btn.clicked.connect(self._refresh_results)
         controls_layout.addWidget(refresh_btn)
         
-        plot_btn = QPushButton("📊 Plot Selected Data")
+        plot_btn = QPushButton("Plot Selected Data")
         plot_btn.clicked.connect(self._plot_selected)
         controls_layout.addWidget(plot_btn)
         
-        export_btn = QPushButton("💾 Export as Geospatial (GeoPackage)")
+        export_btn = QPushButton("Export as Geospatial (GeoPackage)")
         export_btn.clicked.connect(self._export_geospatial)
         controls_layout.addWidget(export_btn)
         
@@ -583,7 +382,7 @@ class ResultsViewerPanel(QWidget):
                     fig.autofmt_xdate()
                     plt.tight_layout()
                     plt.show()
-                    self.log_message.emit("✓ Plot displayed", "success")
+                    self.log_message.emit("Plot displayed", "success")
         except Exception as e:
             self.log_message.emit(f"Error plotting: {str(e)}", "error")
 
@@ -596,7 +395,7 @@ class ResultsViewerPanel(QWidget):
         try:
             # This would integrate with hydroswift's geospatial export
             self.log_message.emit(
-                "GeoPackage export: Use hydroswift.plot_only(...) with --gpkg flag",
+                "GeoPackage export: use hydroswift.merge(run, 'out.gpkg') from Python or `hyswift merge`",
                 "info"
             )
         except Exception as e:
@@ -652,7 +451,7 @@ class UnifiedDiscoveryPanel(QWidget):
         search_layout.addWidget(QLabel("Variable:"))
         search_layout.addWidget(self.query_input)
         
-        self.search_btn = QPushButton("🔍 Search Datasets")
+        self.search_btn = QPushButton("Search Datasets")
         self.search_btn.clicked.connect(self._search_datasets)
         search_layout.addWidget(self.search_btn)
         
@@ -673,7 +472,7 @@ class UnifiedDiscoveryPanel(QWidget):
         
         # Download Controls
         dl_layout = QHBoxLayout()
-        self.dl_btn = QPushButton("⬇️ Download Selected Datasets")
+        self.dl_btn = QPushButton("Download Selected Datasets")
         self.dl_btn.clicked.connect(self._download_selected)
         self.dl_btn.setEnabled(False)
         self.dl_btn.setMinimumHeight(40)

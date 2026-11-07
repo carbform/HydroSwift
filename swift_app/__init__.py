@@ -1,10 +1,8 @@
 """SWIFT app package metadata.
 
-Internal implementation package for SWIFT.
-Public commands are exposed through:
-- python -m hydroswift ...
-- hyswift ... (if installed)
-- python -m swift_app ... (legacy internal entrypoint)
+Internal implementation package for HydroSwift. Public entry points:
+- import hydroswift
+- hyswift ... / python -m hydroswift ...
 """
 
 __version__ = "1.0.0"
@@ -17,43 +15,26 @@ APP_ORG = "Carbform • carbform.github.io"
 VERSION = f"{__version__}"
 VERSION_FULL = f"{VERSION} — {__codename__}"
 
-from .api import (
-    wris,
-    cwc_ns as cwc,
-    nwdp,
+from .api import (  # noqa: E402
     search,
+    estimate,
+    fetch,
+    load,
+    merge,
+    plot,
+    save_catalog,
+    load_catalog,
+    refresh_cwc_stations,
+    rsms,
+    cwc_reservoirs,
+    swot_reservoir_merge,
     help,
     cli_help,
-    merge_only,
-    plot_only,
-    fetch,
     cite,
     coffee,
-    swot_merge,
 )
-from .base_client import BaseHydrologyClient
+from .base_client import BaseHydrologyClient  # noqa: E402
 
+from ._removed import make_getattr  # noqa: E402
 
-_LEGACY_API_REDIRECTS = {
-    "datasets": (
-        "`hydroswift.datasets` has been removed. "
-        "Use `hydroswift.wris.variables()` for WRIS variable definitions."
-    ),
-    "basins": (
-        "`hydroswift.basins()` has been removed. "
-        "Use `hydroswift.wris.basins()` for WRIS basins or `hydroswift.cwc.basins()` for CWC basins."
-    ),
-    "merge": (
-        "`hydroswift.merge()` has been removed. Use `hydroswift.merge_only()` instead."
-    ),
-    "plot": (
-        "`hydroswift.plot()` has been removed. Use `hydroswift.plot_only()` instead."
-    ),
-}
-
-
-def __getattr__(name: str):
-    """Provide clear migration guidance for removed legacy API symbols."""
-    if name in _LEGACY_API_REDIRECTS:
-        raise AttributeError(_LEGACY_API_REDIRECTS[name])
-    raise AttributeError(f"module 'swift_app' has no attribute {name!r}")
+__getattr__ = make_getattr(__name__)
