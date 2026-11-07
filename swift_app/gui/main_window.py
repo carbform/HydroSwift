@@ -24,11 +24,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QThreadPool, QTimer
 from PyQt5.QtGui import QIcon, QFont
 
-from .panels import (
-    UnifiedDiscoveryPanel,
-    DownloadConfigPanel,
-    ResultsViewerPanel,
-)
+from .workbench import Workbench
 from .logger_widget import LoggerWidget
 from .settings_dialog import SettingsDialog
 
@@ -46,7 +42,7 @@ class HydroSwiftGUI(QMainWindow):
         super().__init__(parent)
         
         self.setWindowTitle("HydroSwift  - Hydrological Data Retrieval")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(100, 60, 1400, 980)
         
         # Thread pool for background tasks
         self.thread_pool = QThreadPool()
@@ -71,22 +67,10 @@ class HydroSwiftGUI(QMainWindow):
         main_layout = QVBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # Create tab widget for different workflows
-        self.tab_widget = QTabWidget()
-        main_layout.addWidget(self.tab_widget)
-        
-        # Tab 1: Unified Discovery & Download
-        self.unified_panel = UnifiedDiscoveryPanel()
-        self.tab_widget.addTab(self.unified_panel, "Unified Search")
-        
-        # Tab 3: Download Configuration
-        self.config_panel = DownloadConfigPanel()
-        self.tab_widget.addTab(self.config_panel, "Configuration")
-        
-        # Tab 4: Results & Plotting
-        self.results_panel = ResultsViewerPanel()
-        self.tab_widget.addTab(self.results_panel, "Results")
-        
+        # One screen: Find -> Review -> Get -> Use
+        self.workbench = Workbench()
+        main_layout.addWidget(self.workbench, 1)
+
         # Logger widget at bottom
         logger_label = QLabel("Execution Log:")
         logger_font = QFont()
@@ -95,7 +79,7 @@ class HydroSwiftGUI(QMainWindow):
         main_layout.addWidget(logger_label)
         
         self.logger_widget = LoggerWidget()
-        self.logger_widget.setMaximumHeight(200)
+        self.logger_widget.setMaximumHeight(110)
         main_layout.addWidget(self.logger_widget)
 
     def _setup_menu_bar(self) -> None:
@@ -160,16 +144,8 @@ class HydroSwiftGUI(QMainWindow):
         """Connect UI signals to slots."""
         
         # Wire panels to status updates
-        self.unified_panel.status_changed.connect(self._update_status)
-        self.config_panel.status_changed.connect(self._update_status)
-        
-        # Wire log messages
-        self.unified_panel.log_message.connect(self.logger_widget.append_log)
-        self.config_panel.log_message.connect(self.logger_widget.append_log)
-        self.results_panel.log_message.connect(self.logger_widget.append_log)
-        
-        # Wire download completion
-        self.unified_panel.download_completed.connect(self._on_download_completed)
+        self.workbench.status_changed.connect(self._update_status)
+        self.workbench.log_message.connect(self.logger_widget.append_log)
 
     def _update_status(self, message: str) -> None:
         """Update the status bar message."""
@@ -181,22 +157,10 @@ class HydroSwiftGUI(QMainWindow):
             f"Download completed: {result.get('files_saved', 0)} files saved",
             level="success"
         )
-        
-        # Update results panel if new data available
-        if result.get('output_dir'):
-            self.results_panel.load_results(Path(result['output_dir']))
 
     def _open_output_directory(self) -> None:
         """Open the output directory in file manager."""
-        try:
-            cfg_out = None
-            if hasattr(self, 'config_panel') and self.config_panel:
-                cfg_out = self.config_panel.get_config().get('output_dir')
-            path = Path(cfg_out) if cfg_out else self.output_dir
-        except Exception:
-            path = self.output_dir
-
-        path = Path(path)
+        path = Path(self.workbench.out_edit.text() or self.output_dir)
         path.mkdir(parents=True, exist_ok=True)
         try:
             # Use subprocess with argument list to handle spaces in path
@@ -217,23 +181,7 @@ class HydroSwiftGUI(QMainWindow):
         self.output_dir = Path(settings.get('output_dir', 'output'))
         self.output_dir.mkdir(exist_ok=True)
         
-        # Update panels with new settings
-        self.wris_panel.set_output_dir(self.output_dir)
-
-        # Update configuration panel UI if present
-        try:
-            if hasattr(self, 'config_panel') and self.config_panel:
-                if hasattr(self.config_panel, 'output_path'):
-                    self.config_panel.output_path.setText(str(self.output_dir))
-        except Exception:
-            pass
-
-        # Refresh results view to use updated output directory
-        try:
-            if hasattr(self, 'results_panel') and self.results_panel:
-                self.results_panel.load_results(self.output_dir)
-        except Exception:
-            pass
+        self.workbench.set_output_dir(self.output_dir)
         
         self.logger_widget.append_log(
             f"Settings updated. Output dir: {self.output_dir}",
@@ -251,14 +199,13 @@ class HydroSwiftGUI(QMainWindow):
 
 <p><b>Data Sources:</b>
 <ul>
-<li>India Water Resources Information System (WRIS)</li>
-<li>Central Water Commission (CWC) Flood Forecasting System</li>
+<li>NWDP (India-WRIS open data portal)</li>
+<li>CWC flood forecasting stations</li>
+<li>CWC reservoir storage (latest day)</li>
 </ul>
 </p>
 
-<p><b>Supported Variables:</b><br/>
-Discharge, Water Level, Rainfall, Temperature, Humidity,
-Solar Radiation, Sediment, Groundwater Level, Atmospheric Pressure</p>
+<p>Workflow: Find, Review, Get, Use. The same steps are available from Python and the command line.</p>
 
 <p><a href="https://github.com/carbform/HydroSwift">GitHub</a> | 
 <a href="https://hydroswift.readthedocs.io/">Documentation</a></p>

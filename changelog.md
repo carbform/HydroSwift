@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased — unified engine (breaking)
+
+* **GUI rebuilt as one Find -> Review -> Get -> Use screen** on the shared engine: source-status strip, provenance columns (matched on, coverage, not stated by source), request list, size estimate, progress with Cancel, run results with plot and merge. The Configuration, Results and Unified Search tabs are gone.
 **One workflow: Find -> Review -> Get -> Use** (`search` -> `estimate` -> `fetch` -> `load`).
 - New engine (`swift_app/engine.py`): fixed catalog schema; NWDP, CWC flood-forecasting and CWC RSMS adapters; per-source status (`attrs['source_status']`, `attrs['partial']`); `Inferred` column; `manifest.json` for every fetch.
 - NWDP: search now pages through all results and reports errors/truncation instead of returning "no data"; dates are parsed as DD-MM-YYYY (they were being read month-first); coverage is taken from the resource name; the date range is applied to every download; empty resources are counted, not dropped silently.
