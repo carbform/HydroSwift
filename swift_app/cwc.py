@@ -932,7 +932,11 @@ def get_cwc_station_metadata(
 # Worker function for parallel downloads
 # ---------------------------------------------------------
 
-def download_station(station, output_dir, args):
+def download_station_detail(station, output_dir, args):
+    """Download one CWC station; return a dict describing what happened.
+
+    Keys: status ('saved'|'skipped'|'empty'|'error'), path, rows, start, end, error.
+    """
 
     code = str(station["code"]).strip()
     name = str(station["name"]).strip()
@@ -952,7 +956,7 @@ def download_station(station, output_dir, args):
     import glob
     existing = glob.glob(os.path.join(output_dir, f"CWC_{basin_name}_{safe_name}_*.{ext}"))
     if existing and not args.overwrite:
-        return "skipped"
+        return {"status": "skipped", "path": existing[0], "rows": None, "start": None, "end": None, "error": None}
 
     # ---------------------------------------------------------
     # Fetch data
@@ -966,7 +970,7 @@ def download_station(station, output_dir, args):
     )
 
     if df is None or df.empty:
-        return False
+        return {"status": "empty", "path": None, "rows": 0, "start": None, "end": None, "error": None}
 
     # ---------------------------------------------------------
     # Parse timestamps
@@ -977,7 +981,7 @@ def download_station(station, output_dir, args):
 
 
     if df.empty:
-        return False
+        return {"status": "empty", "path": None, "rows": 0, "start": None, "end": None, "error": None}
 
     # Normalise CWC value column so downstream plot/merge logic can rely on `wse`.
     if "wse" not in df.columns and "water_level" in df.columns:
@@ -1109,10 +1113,20 @@ def download_station(station, output_dir, args):
                 df.to_excel(writer, sheet_name="timeseries", index=False)
                 meta_df.to_excel(writer, sheet_name="metadata", index=False)
 
-    except Exception:
-        return False
+    except Exception as e:
+        return {"status": "error", "path": None, "rows": len(df), "start": None, "end": None, "error": str(e)}
 
-    return True
+    return {"status": "saved", "path": outfile, "rows": len(df), "start": df['time'].min(), "end": df['time'].max(), "error": None}
+
+def download_station(station, output_dir, args):
+    """Legacy wrapper: True (saved), False (nothing/failed) or "skipped"."""
+    res = download_station_detail(station, output_dir, args)
+    if res["status"] == "saved":
+        return True
+    if res["status"] == "skipped":
+        return "skipped"
+    return False
+
 
 # ---------------------------------------------------------
 # Main CWC downloader

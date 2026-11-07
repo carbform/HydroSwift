@@ -80,6 +80,51 @@ def nwdp_datasets(query: str = None, org: str = None, group: str = None):
         df.attrs["source"] = "nwdp"
     return df
 
+
+def parse_nwdp_dates(series):
+    """Parse a date column. NWDP uses DD-MM-YYYY; ISO strings are left to pandas.
+
+    Each value is tried as DD-MM-YYYY first, then as ISO/default, so neither
+    format is misread (``dayfirst=True`` alone flips ISO month/day).
+    """
+    s = series.astype(str).str.strip()
+    out = pd.to_datetime(s, format="%d-%m-%Y", errors="coerce")
+    rest = out.isna()
+    if rest.any():
+        out[rest] = pd.to_datetime(s[rest], errors="coerce", format="ISO8601")
+    return out
+
+
+def _nwdp_safe_name(res_name):
+    safe = "".join([c if c.isalnum() else "_" for c in str(res_name)]).strip("_")
+    return " ".join(safe.split("_")).title().replace(" ", "_")
+
+
+def _nwdp_time_span(df):
+    """Return (min, max) Timestamps of the first date-like column, or (None, None)."""
+    date_cols = [c for c in df.columns if "date" in c.lower() or "time" in c.lower() or "monitoring" in c.lower()]
+    if date_cols:
+        s = parse_nwdp_dates(df[date_cols[0]]).dropna()
+        if not s.empty:
+            return s.min(), s.max()
+    return None, None
+
+
+def nwdp_save(df, output_dir, org_name, res_name, format="csv", nested=True):
+    """Write one NWDP resource using the standard file name; returns the path."""
+    out_dir = Path(output_dir) / "nwdp" / org_name if nested else Path(output_dir) / "nwdp"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    lo, hi = _nwdp_time_span(df)
+    time_range = f"_{lo.strftime('%Y%m%d')}_{hi.strftime('%Y%m%d')}" if lo is not None else ""
+    out_path = out_dir / f"NWDP_{org_name}_{_nwdp_safe_name(res_name)}{time_range}.{format}"
+    if format.lower() == "csv":
+        df.to_csv(out_path, index=False)
+    elif format.lower() == "json":
+        df.to_json(out_path, orient="records", indent=2)
+    else:
+        raise ValueError(f"Unsupported format: {format}")
+    return out_path
+
 def nwdp_download(resource_id: str = None, query: str = None, org: str = None, group: str = None, filters: dict = None, output_dir: str = "output", format: str = "csv", quiet: bool = False, res_name: str = None, org_name: str = None):
     """
     Downloads data from NWDP CKAN API, either by specific resource_id or by searching.
@@ -121,7 +166,7 @@ def nwdp_download(resource_id: str = None, query: str = None, org: str = None, g
         time_range = ""
         date_cols = [c for c in df.columns if "date" in c.lower() or "time" in c.lower() or "monitoring" in c.lower()]
         if date_cols:
-            s = pd.to_datetime(df[date_cols[0]], errors="coerce").dropna()
+            s = parse_nwdp_dates(df[date_cols[0]]).dropna()
             if not s.empty:
                 time_range = f"_{s.min().strftime('%Y%m%d')}_{s.max().strftime('%Y%m%d')}"
                 
@@ -177,7 +222,7 @@ def nwdp_download(resource_id: str = None, query: str = None, org: str = None, g
             time_range = ""
             date_cols = [c for c in df.columns if "date" in c.lower() or "time" in c.lower() or "monitoring" in c.lower()]
             if date_cols:
-                s = pd.to_datetime(df[date_cols[0]], errors="coerce").dropna()
+                s = parse_nwdp_dates(df[date_cols[0]]).dropna()
                 if not s.empty:
                     time_range = f"_{s.min().strftime('%Y%m%d')}_{s.max().strftime('%Y%m%d')}"
                     
