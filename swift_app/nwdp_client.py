@@ -1,6 +1,7 @@
 import time
 import requests
 import json
+from typing import Optional
 
 class NwdpClient:
     """API client for NWDP CKAN DataStore."""
@@ -129,8 +130,23 @@ class NwdpClient:
         self.last_search = status
         return results
 
-    def fetch_records(self, resource_id: str, filters: dict = None, limit: int = 10000) -> list[dict]:
-        """Fetch every DataStore record; outcome is left in ``self.last_fetch``."""
+    def count_records(self, resource_id: str) -> Optional[int]:
+        """Total records in a resource from one cheap request (limit=0); None if unavailable."""
+        try:
+            r = self.session.get(self.DATASTORE_API, params={"resource_id": resource_id, "limit": 0}, timeout=30)
+            if r.status_code == 200 and r.json().get("success"):
+                return r.json()["result"].get("total")
+        except Exception:
+            pass
+        return None
+
+    def fetch_records(self, resource_id: str, filters: dict = None, limit: int = 10000,
+                      progress=None, cancel=None) -> list[dict]:
+        """Fetch every DataStore record; outcome is left in ``self.last_fetch``.
+
+        ``progress(read, total)`` is called after each page; if the
+        ``cancel`` event is set the loop stops and the result is marked incomplete.
+        """
         records = []
         offset = 0
         status = {
@@ -161,6 +177,11 @@ class NwdpClient:
                     break
                 records.extend(batch)
                 offset += len(batch)
+                if progress:
+                    progress(len(records), status["records_reported"])
+                if cancel is not None and cancel.is_set():
+                    status["cancelled"] = True
+                    raise RuntimeError("cancelled by user")
                 if len(batch) < limit:
                     break
         except Exception as e:

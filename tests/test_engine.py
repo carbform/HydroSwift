@@ -172,3 +172,200 @@ def test_nwdp_dates_are_day_first(nwdp, tmp_path):
     out = eng.fetch_catalog(table, output_dir=tmp_path, quiet=True)
     assert out.loc[0, "start"].startswith("1927-04-01") and out.loc[0, "end"].startswith("1928-12-31")
     assert "19270401_19281231" in out.loc[0, "path"]
+
+
+# ---------------------------------------------------------------- new engine features
+import threading
+
+
+def test_period_drops_known_outside_keeps_unknown_and_counts(nwdp):
+    nwdp(FakeSession(packages=[pkg(1, rname="Rain 1900 To 1928"), pkg(2, rname="Rain 2015 To 2020"), pkg(3, rname="Rain no period")]))
+    df = eng.search_catalog("rainfall", sources=["NWDP"], period=("2016", "2017"))
+    assert list(df["Title"]) == ["Rain 2015 To 2020", "Rain no period"]
+    st = df.attrs["source_status"][0]
+    assert st["dropped"]["outside_period"] == 1 and "1 rows have unknown coverage" in st["note"]
+    assert list(df["CoverageKnown"]) == [True, False]
+
+
+def test_bad_period_rejected():
+    with pytest.raises(ValueError):
+        eng.parse_period(("2021", "2019"))
+    assert eng.parse_period("2020:2022") == ("2020-01-01", "2022-12-31")
+
+
+def test_ids_are_exact_not_substring(nwdp):
+    nwdp(FakeSession(packages=[pkg(1), pkg(11)]))
+    df = eng.search_catalog("rainfall", sources=["NWDP"], ids=["r1"])
+    assert list(df["ID"]) == ["r1"]
+
+
+def test_cwc_exact_basin_is_equality_and_nwdp_is_skipped_with_reason(nwdp):
+    nwdp(FakeSession(packages=[pkg(1)]))
+    exact = eng.search_catalog("discharge", basin="Krishna", sources=["CWC", "NWDP"])
+    assert len(exact) > 0 and exact["Location"].str.split(",").str[0].str.strip().eq("Krishna").all()
+    nw = [s for s in exact.attrs["source_status"] if s["source"] == "NWDP"][0]
+    assert "skipped" in nw["note"] and not (exact["Source"] == "NWDP").any()
+    partial = eng.search_catalog("discharge", location="rishn", sources=["CWC"])
+    assert len(partial) >= len(exact)  # substring is broader than equality
+
+
+def test_estimate_exact_for_nwdp_unknown_for_cwc(nwdp):
+    nwdp(FakeSession(packages=[pkg(1)], records=[{"d": i} for i in range(7)]))
+    t = pd.concat([eng.search_catalog("rainfall", sources=["NWDP"]),
+                   eng.search_catalog("discharge", "krishna", sources=["CWC"]).head(1)], ignore_index=True)
+    est = eng.estimate_catalog(t)
+    assert est.loc[0, "EstRecords"] == 7
+    assert pd.isna(est.loc[1, "EstRecords"]) and "unknown" in est.loc[1, "EstNote"]
+
+
+def test_cancel_mid_download_marks_cancelled_and_writes_no_file(nwdp, tmp_path):
+    nwdp(FakeSession(packages=[pkg(1)], records=[{"Monitoring Date": "01-01-2020", "v": i} for i in range(25000)]))
+    table = eng.search_catalog("rainfall", sources=["NWDP"])
+    ev = threading.Event()
+    seen = []
+
+    def cb(e):
+        seen.append(e["event"])
+        if e["event"] == "page":
+            ev.set()
+
+    out = eng.fetch_catalog(table, output_dir=tmp_path, progress=cb, cancel=ev)
+    assert out.loc[0, "status"] == "cancelled"
+    assert "page" in seen and "item_done" in seen
+    assert not list((tmp_path / "nwdp").rglob("*.csv")) if (tmp_path / "nwdp").exists() else True
+
+
+def test_faulty_progress_callback_does_not_break_download(nwdp, tmp_path):
+    nwdp(FakeSession(packages=[pkg(1)], records=[{"Monitoring Date": "01-01-2020", "v": 1}]))
+    table = eng.search_catalog("rainfall", sources=["NWDP"])
+    out = eng.fetch_catalog(table, output_dir=tmp_path, progress=lambda e: 1 / 0)
+    assert out.loc[0, "status"] == "saved"
+
+
+def test_resume_same_request_reuses_but_different_period_redownloads(nwdp, tmp_path):
+    s = FakeSession(packages=[pkg(1)], records=[{"Monitoring Date": "05-03-2016", "v": 1}])
+    nwdp(s)
+    table = eng.search_catalog("rainfall", sources=["NWDP"])
+    a = eng.fetch_catalog(table, output_dir=tmp_path, period=("2016", "2016"))
+    assert a.loc[0, "status"] == "saved"
+    b = eng.fetch_catalog(table, output_dir=tmp_path, period=("2016", "2016"))
+    assert b.loc[0, "status"] == "skipped" and b.loc[0, "reused"]
+    c = eng.fetch_catalog(table, output_dir=tmp_path, period=("2016", "2016"))  # third run still reuses
+    assert c.loc[0, "status"] == "skipped"
+    d = eng.fetch_catalog(table, output_dir=tmp_path, period=("2015", "2017"))
+    assert d.loc[0, "status"] == "saved"
+    e = eng.fetch_catalog(table, output_dir=tmp_path, period=("2016", "2016"), overwrite=True)
+    assert e.loc[0, "status"] == "saved"
+
+
+def test_manifest_says_provenance_unavailable_when_attrs_lost(nwdp, tmp_path):
+    nwdp(FakeSession(packages=[pkg(1), pkg(2)], records=[{"Monitoring Date": "05-03-2016", "v": 1}]))
+    table = eng.search_catalog("rainfall", sources=["NWDP"])
+    filtered = pd.DataFrame(table.to_dict("records"))  # rebuilt by hand: attrs are gone
+    assert not filtered.attrs
+    out = eng.fetch_catalog(filtered, output_dir=tmp_path)
+    doc = json.loads(open(out.attrs["manifest"]).read())
+    assert "unavailable" in doc["query"] and "unavailable" in doc["source_status"]
+
+
+# ---------------------------------------------------------------- tidy / load
+import swift_app.tidy as tidy
+
+
+def _write(path, df, header=""):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(header + df.to_csv(index=False))
+    return str(path)
+
+
+def item(src, title, path, status="saved"):
+    return {"source": src, "title": title, "path": path, "status": status}
+
+
+def test_tidy_nwdp_rainfall_units_and_columns(tmp_path):
+    p = _write(tmp_path / "r.csv", pd.DataFrame({
+        "Station Code": ["A", "A"], "Location Name": ["Gandsi", "Gandsi"], "Latitude": [13.1, 13.1],
+        "Longitude": [76.2, 76.2], "Monitoring Date": ["01-04-1927", "02-04-1927"], "Rainfall (MM)": [1.5, 0.0]}))
+    out = tidy.load(pd.DataFrame([item("NWDP", "Rainfall Manual Daily Karnataka", p)]))
+    assert list(out.columns) == tidy.TIDY_COLUMNS and len(out) == 2
+    assert set(out["variable"]) == {"rainfall"} and set(out["unit"]) == {"mm"}
+    assert out["time"].min() == pd.Timestamp("1927-04-01")  # day-first, not Jan 4
+    assert out.loc[0, "station_name"] == "Gandsi" and out.loc[0, "lat"] == 13.1
+
+
+def test_tidy_unit_normalisation_and_flags(tmp_path):
+    base = {"Station": ["S"], "Latitude": [1.0], "Longitude": [2.0], "Data Acquisition Time": ["05-03-2016 14:00:00"]}
+    cases = {
+        "Air Temperature Telemetry Hourly (AoC)": ("temperature", "degC"),
+        "Telemetry Hourly Wind Speed (Km/Hr)": ("wind_speed", "km/h"),
+        "Telemetry_Hourly_Atmospheric Pressure (mb)": ("atm_pressure", "hPa"),
+        "Solar Radiation (Watt/m2)": ("solar_radiation", "W/m2"),
+    }
+    for col, (var, unit) in cases.items():
+        p = _write(tmp_path / f"{var}.csv", pd.DataFrame({**base, col: [3.0]}))
+        out = tidy.load(pd.DataFrame([item("NWDP", col, p)]))
+        assert (out.loc[0, "variable"], out.loc[0, "unit"]) == (var, unit), col
+        assert out.loc[0, "time"] == pd.Timestamp("2016-03-05 14:00")
+
+
+def test_tidy_groundwater_and_reservoir_use_title_and_flag(tmp_path):
+    gw = _write(tmp_path / "g.csv", pd.DataFrame({"Station": ["S"], "RL_MSL": [100.0], "Data Acquisition Time": ["05-03-2016 14:00:00"],
+                                                   "Groundwater Level Telemetry Quadridaily (meter)": [4.2]}))
+    rs = _write(tmp_path / "rs.csv", pd.DataFrame({"Station": ["Pench"], "Data Acquisition Time": ["05-03-2016 14:00:00"], "Water Level (M)": [450.0]}))
+    out = tidy.load(pd.DataFrame([item("NWDP", "Ground Water Level Kerala", gw),
+                                  item("NWDP", "Reservoir Water Level, Pench Reservoir", rs)]))
+    g = out[out.variable == "groundwater_level"].iloc[0]
+    assert "depth vs elevation" in g["flag"] and g["value"] == 4.2   # RL_MSL not mistaken for the value
+    assert (out.variable == "reservoir_level").sum() == 1
+
+
+def test_tidy_multiple_named_columns_become_separate_variables(tmp_path):
+    p = _write(tmp_path / "d.csv", pd.DataFrame({
+        "Station": ["S"], "Data Acquisition Time": ["05-03-2016 14:00:00"], "River Water Level (m)": [2.0],
+        "Area (m2)": [10.0], "Velocity (m/sec)": [0.5], "Total_discharge (m3/sec)": [5.0]}))
+    out = tidy.load(pd.DataFrame([item("NWDP", "River Velocity and Discharge Rajasthan", p)]))
+    assert sorted(out["variable"]) == ["discharge", "water_level"]
+    assert out[out.variable == "discharge"].iloc[0]["unit"] == "m3/s"
+
+
+def test_tidy_unstated_unit_is_flagged(tmp_path):
+    p = _write(tmp_path / "q.csv", pd.DataFrame({"Station Code": ["S"], "Monitoring Date": ["05-03-2016"], "Water Discharge": [9.0]}))
+    out = tidy.load(pd.DataFrame([item("NWDP", "Discharge Gauge Daily Karnataka", p)]))
+    assert out.loc[0, "variable"] == "discharge" and "unit not stated" in out.loc[0, "flag"]
+
+
+def test_unmappable_resource_is_reported_not_guessed(tmp_path):
+    p = _write(tmp_path / "wq.csv", pd.DataFrame({"NAME OF STATION": ["S"], "MONTH": ["Jan"], "PARAMETER": ["pH"], "READING": [7.1]}))
+    missing = str(tmp_path / "gone.csv")
+    out = tidy.load(pd.DataFrame([item("NWDP", "Surface Water Quality Manual Sikkim", p),
+                                  item("NWDP", "Rainfall x", missing)]))
+    assert out.empty
+    reasons = {u["file"]: u["reason"] for u in out.attrs["unmapped"]}
+    assert "no recognisable time column" in reasons[p] and reasons[missing] == "file missing"
+
+
+def test_tidy_cwc_marks_rating_curve_discharge_as_estimated(tmp_path):
+    p = _write(tmp_path / "c.csv", pd.DataFrame({
+        "station_code": ["001-X"] * 2, "time": ["2022-01-01 08:00", "2022-01-01 09:00"], "wse": [10.0, 10.5],
+        "discharge": [100.0, 110.0], "lat": [1.0] * 2, "lon": [2.0] * 2,
+        "discharge_source": ["rc_guardian_2024"] * 2}), header="# HydroSwift\n# a: b\n")
+    out = tidy.load(pd.DataFrame([item("CWC", "Shimoga", p)]))
+    q = out[out.variable == "discharge"]
+    assert set(q["method"]) == {"rc_guardian_2024"} and "rating curve" in q.iloc[0]["flag"]
+    assert set(out[out.variable == "water_level"]["method"]) == {"observed"}
+
+
+def test_tidy_rsms_and_load_from_directory(tmp_path):
+    p = _write(tmp_path / "cwc_rsms" / "s.csv", pd.DataFrame({
+        "reservoir_unique_id": ["R1"], "reservoir_name": ["Dam"], "entry_date": ["2026-11-06"],
+        "storage_bcm": [1.25], "latitude": [10.0], "longitude": [20.0]}))
+    (tmp_path / "manifest.json").write_text(json.dumps({"items": [item("CWC-RSMS", "snap", p)]}))
+    out = tidy.load(tmp_path)
+    assert out.loc[0, "variable"] == "reservoir_storage" and out.loc[0, "unit"] == "BCM"
+    with pytest.raises(FileNotFoundError):
+        tidy.load(tmp_path / "cwc_rsms")
+
+
+def test_load_skips_failed_and_cancelled_items(tmp_path):
+    out = tidy.load(pd.DataFrame([item("NWDP", "x", None, status="error"), item("NWDP", "y", None, status="cancelled")]))
+    assert out.empty and out.attrs["unmapped"] == []

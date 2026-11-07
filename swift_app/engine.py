@@ -34,7 +34,7 @@ import pandas as pd
 
 CATALOG_COLUMNS = [
     "Source", "Title", "Location", "Variable", "Resolution", "ID",
-    "lat", "lon", "Unit", "CoverageStart", "CoverageEnd",
+    "lat", "lon", "Unit", "CoverageStart", "CoverageEnd", "CoverageKnown",
     "Provider", "Endpoint", "MatchedOn", "Inferred",
 ]
 
@@ -60,7 +60,7 @@ def match_location(location: Optional[str], fields: dict) -> Optional[str]:
 _PERIOD_RE = re.compile(r"(\d{4})\s*(?:to|-|–)\s*(\d{4})", re.I)
 
 
-def parse_period(text) -> tuple:
+def parse_name_period(text) -> tuple:
     """Pull a 'YYYY To YYYY' span out of a resource name -> (start, end) ISO dates or (None, None)."""
     m = _PERIOD_RE.search(str(text or ""))
     if not m:
@@ -69,6 +69,39 @@ def parse_period(text) -> tuple:
     if a > b or not (1800 <= a <= 2100 and 1800 <= b <= 2100):
         return None, None
     return f"{a}-01-01", f"{b}-12-31"
+
+
+def parse_period(period) -> tuple:
+    """Normalise a period to (start_iso, end_iso) or (None, None).
+
+    Accepts ("2020", "2022"), ("2020-03-01", None), "2020:2022" or "2020".
+    A bare-year end means the end of that year.
+    """
+    if period is None:
+        return None, None
+    if isinstance(period, str):
+        parts = period.split(":")
+        period = (parts[0], parts[1] if len(parts) > 1 else parts[0])
+    a, b = period
+    def one(x, end):
+        if x in (None, ""):
+            return None
+        x = str(x).strip()
+        if re.fullmatch(r"\d{4}", x):
+            return f"{x}-12-31" if end else f"{x}-01-01"
+        return pd.Timestamp(x).date().isoformat()
+    lo, hi = one(a, False), one(b, True)
+    if lo and hi and lo > hi:
+        raise ValueError(f"period start {lo} is after end {hi}")
+    return lo, hi
+
+
+def _overlaps(cs, ce, lo, hi) -> bool:
+    if lo and ce and pd.Timestamp(ce) < pd.Timestamp(lo):
+        return False
+    if hi and cs and pd.Timestamp(cs) > pd.Timestamp(hi):
+        return False
+    return True
 
 
 @dataclass
@@ -108,6 +141,10 @@ class FetchRecord:
     error: Optional[str] = None
     filtered_client_side: bool = False
     complete: Optional[bool] = None
+    req_start: Optional[str] = None
+    req_end: Optional[str] = None
+    method_note: Optional[str] = None
+    reused: bool = False
     fetched_at: str = field(default_factory=_now)
 
 
@@ -119,6 +156,23 @@ class FetchOptions:
     format: str = "csv"
     overwrite: bool = False
     quiet: bool = False
+    rc_discharge: bool = True      # CWC discharge exists only as a rating-curve estimate
+    resume: bool = True            # reuse files recorded in an earlier manifest for the same request
+    progress: Any = None           # callable(event: dict); never prints
+    cancel: Any = None             # threading.Event-like with is_set()
+
+
+def _slug(x) -> str:
+    return "".join(c if c.isalnum() else "_" for c in str(x or "unknown")).strip("_") or "unknown"
+
+
+def _emit(opts, event, rec=None, **kw):
+    if opts.progress is not None:
+        try:
+            opts.progress({"event": event, "source": getattr(rec, "source", None),
+                           "id": getattr(rec, "id", None), "title": getattr(rec, "title", None), **kw})
+        except Exception:
+            pass  # a faulty UI callback must never break a download
 
 
 def _iso(ts) -> Optional[str]:
@@ -178,7 +232,7 @@ class NwdpAdapter:
             # ("... 1900 To 1928"); show it so rows are distinguishable, and use it as coverage
             rname = str(r.get("resource_name") or "").strip()
             title = rname or str(r.get("dataset_title", ""))
-            cov_s, cov_e = parse_period(rname)
+            cov_s, cov_e = parse_name_period(rname)
             rows.append({
                 "Source": self.name,
                 "Title": title,
@@ -186,7 +240,7 @@ class NwdpAdapter:
                 "Variable": var, "Resolution": res,
                 "ID": str(r.get("resource_id", "")),
                 "lat": None, "lon": None, "Unit": None,
-                "CoverageStart": cov_s, "CoverageEnd": cov_e,
+                "CoverageStart": cov_s, "CoverageEnd": cov_e, "CoverageKnown": bool(cov_s),
                 "Provider": str(r.get("organization", "")) or "NWDP",
                 "Endpoint": r.get("dataset_url") or getattr(client, "BASE", ""),
                 "MatchedOn": matched_on,
@@ -211,11 +265,17 @@ class NwdpAdapter:
                 rec.error = f"not downloaded: resource period {cs[:4]}-{ce[:4]} (from its name) is outside the requested range"
                 return rec
         try:
-            records = client.fetch_records(rec.id)
+            def _page(read, total):
+                _emit(opts, "page", rec, read=read, total=total)
+            records = client.fetch_records(rec.id, progress=_page, cancel=opts.cancel)
             info = getattr(client, "last_fetch", None) or {}
             rec.complete = info.get("complete", True)
             if not info.get("ok", True) or not rec.complete:
                 rec.error = info.get("error")
+            if info.get("cancelled"):
+                rec.status = "cancelled"
+                rec.records = len(records)
+                return rec
             if not records:
                 rec.status = "error" if rec.error else "empty"
                 rec.records = 0
@@ -265,6 +325,10 @@ class CwcAdapter:
             return [], st
         df = load_station_table(refresh=False)
         st.note = "station list is the packaged/cached metadata table (not a live query)"
+        try:
+            from .cwc import _get_rc_row
+        except Exception:  # pragma: no cover
+            _get_rc_row = lambda *a, **k: None  # noqa: E731
         rows = []
         for _, r in df.iterrows():
             m = match_location(location, {
@@ -277,10 +341,12 @@ class CwcAdapter:
                 "Source": self.name,
                 "Title": str(r.get("name", "")),
                 "Location": f"{r.get('basin', '')}, {r.get('state', '')}",
-                "Variable": "Water Level / Discharge", "Resolution": "Hourly",
+                "Variable": ("Water level; discharge (rating-curve estimate)"
+                             if _has_rc(_get_rc_row, r) else "Water level"),
+                "Resolution": "Hourly",
                 "ID": str(r.get("code", "")),
                 "lat": r.get("lat"), "lon": r.get("lon"), "Unit": "m / m3/s",
-                "CoverageStart": None, "CoverageEnd": None,
+                "CoverageStart": None, "CoverageEnd": None, "CoverageKnown": False,
                 "Provider": "CWC", "Endpoint": self.endpoint,
                 "MatchedOn": m,
                 # catalogue does not state per-station variables, cadence or period of record
@@ -296,19 +362,23 @@ class CwcAdapter:
         from .cwc import download_station_detail
         rec = FetchRecord(self.name, str(row["ID"]), str(row["Title"]), endpoint=self.endpoint)
         Args = namedtuple("Args", ["format", "overwrite", "start_date", "end_date", "cwc_var", "cwc_rc_discharge"])
-        args = Args(opts.format, opts.overwrite, opts.start_date, opts.end_date, None, False)
+        # the engine owns skip/resume logic (manifest), so the legacy "any file exists" skip is off
+        args = Args(opts.format, True, opts.start_date, opts.end_date, None, bool(opts.rc_discharge))
         station = {
             "code": row["ID"], "name": row["Title"],
             "basin": row.get("_basin") or str(row["Location"]).split(",")[0].strip(),
             "lat": row.get("lat"), "lon": row.get("lon"), "rl_zero": row.get("_rl_zero"),
         }
         try:
-            os.makedirs(opts.output_dir, exist_ok=True)
-            res = download_station_detail(station, opts.output_dir, args)
+            outdir = os.path.join(opts.output_dir, "cwc", _slug(station["basin"]))
+            os.makedirs(outdir, exist_ok=True)
+            res = download_station_detail(station, outdir, args)
             rec.status = res["status"]
             rec.path, rec.records = res["path"], res["rows"]
             rec.start, rec.end = _iso(res["start"]), _iso(res["end"])
             rec.error = res["error"]
+            if opts.rc_discharge:
+                rec.method_note = "discharge, where present, is estimated from stage via rating curves (not observed)"
         except Exception as e:
             rec.status, rec.error = "error", str(e)
         return rec
@@ -334,7 +404,7 @@ class RsmsAdapter:
             "Location": "All India", "Variable": "Reservoir storage and level",
             "Resolution": "Daily (latest snapshot only)", "ID": "rsms-daily",
             "lat": None, "lon": None, "Unit": None,
-            "CoverageStart": None, "CoverageEnd": None,
+            "CoverageStart": None, "CoverageEnd": None, "CoverageKnown": False,
             "Provider": "CWC", "Endpoint": self.endpoint,
             "MatchedOn": "", "Inferred": "Unit,Coverage",
         }
@@ -355,10 +425,18 @@ class RsmsAdapter:
                 return rec
             df.to_csv(path, index=False)
             rec.status, rec.path, rec.records = "saved", str(path), len(df)
-            rec.error = "snapshot of the latest day only; start/end date not applied"
+            rec.start = rec.end = _iso(pd.to_datetime(df.get("entry_date"), errors="coerce").max())
+            rec.method_note = "snapshot of the latest day only; requested start/end not applied"
         except Exception as e:
             rec.status, rec.error = "error", str(e)
         return rec
+
+
+def _has_rc(get_rc_row, r) -> bool:
+    try:
+        return get_rc_row(str(r.get("code", "")), str(r.get("name", ""))) is not None
+    except Exception:
+        return False
 
 
 ADAPTERS = {"NWDP": NwdpAdapter, "CWC": CwcAdapter, "CWC-RSMS": RsmsAdapter}
@@ -368,18 +446,61 @@ ADAPTERS = {"NWDP": NwdpAdapter, "CWC": CwcAdapter, "CWC-RSMS": RsmsAdapter}
 # Public engine functions
 # ---------------------------------------------------------------------------
 
-def search_catalog(query=None, location=None, sources=None) -> pd.DataFrame:
-    """Search all (or the named) sources; return a CATALOG_COLUMNS table with status in ``attrs``."""
+def search_catalog(query=None, location=None, sources=None, *, period=None,
+                   ids=None, basin=None, state=None) -> pd.DataFrame:
+    """Search all (or the named) sources; return a CATALOG_COLUMNS table with status in ``attrs``.
+
+    ``location`` is a case-insensitive substring. For exact selection use
+    ``ids`` (catalog IDs), ``basin`` or ``state`` (case-insensitive equality).
+    ``basin``/``state`` need source metadata, so only CWC can honour them;
+    NWDP is then skipped and the status says so rather than ignoring the filter.
+    ``period`` drops rows whose *known* coverage does not overlap it; rows with
+    unknown coverage are kept, flagged ``CoverageKnown=False`` and counted.
+    """
     names = [s.upper() for s in (sources or ADAPTERS)]
     unknown = [n for n in names if n not in ADAPTERS]
     if unknown:
         raise ValueError(f"Unknown source(s) {unknown}; choose from {list(ADAPTERS)}.")
+    lo, hi = parse_period(period)
+    id_set = {str(i).strip().lower() for i in ([ids] if isinstance(ids, str) else (ids or []))}
+    exact = {"basin": basin, "state": state}
     rows, statuses = [], []
     for n in names:
+        if (basin or state) and n != "CWC":
+            statuses.append(SourceStatus(n, note=f"skipped: exact basin/state filters need source metadata that {n} does not provide"))
+            continue
         try:
             r, st = ADAPTERS[n]().search(query, location)
         except Exception as e:
             r, st = [], SourceStatus(n, ok=False, complete=False, error=str(e))
+        if n == "CWC":
+            for key, want in exact.items():
+                if want:
+                    wl = str(want).strip().lower()
+                    col = "Location"
+                    keep = []
+                    for row in r:
+                        parts = [x.strip() for x in str(row["Location"]).split(",")]
+                        base, st_ = parts[0], (parts[1] if len(parts) > 1 else "")
+                        val = base if key == "basin" else st_
+                        if val.lower() == wl:
+                            keep.append(row)
+                    st.dropped[f"not_{key}={want}"] = len(r) - len(keep)
+                    r = keep
+        if id_set:
+            before = len(r)
+            r = [x for x in r if str(x["ID"]).lower() in id_set]
+            if before - len(r):
+                st.dropped["not_in_ids"] = before - len(r)
+        if lo or hi:
+            keep = [x for x in r if _overlaps(x.get("CoverageStart"), x.get("CoverageEnd"), lo, hi)]
+            if len(r) - len(keep):
+                st.dropped["outside_period"] = len(r) - len(keep)
+            unk = sum(1 for x in keep if not x.get("CoverageKnown"))
+            if unk:
+                st.note = ((st.note + "; ") if st.note else "") + f"{unk} rows have unknown coverage and were kept"
+            r = keep
+        st.rows = len(r)
         rows.extend(r)
         statuses.append(st)
     hidden = ["_org_id", "_basin", "_rl_zero"]
@@ -387,32 +508,89 @@ def search_catalog(query=None, location=None, sources=None) -> pd.DataFrame:
     for c in CATALOG_COLUMNS + hidden:
         if c not in df.columns:
             df[c] = None
-    # hidden helper columns travel with the table so fetch() needs no second lookup
     df = df[CATALOG_COLUMNS + hidden].reset_index(drop=True)
     df.attrs["swift_type"] = "search_results"
-    df.attrs["query"] = {"query": query, "location": location, "sources": names}
+    df.attrs["query"] = {"query": query, "location": location, "sources": names, "period": [lo, hi],
+                         "ids": sorted(id_set) or None, "basin": basin, "state": state}
     df.attrs["source_status"] = [s.as_dict() for s in statuses]
     df.attrs["partial"] = any((not s.ok) or (not s.complete) for s in statuses)
     return df
 
 
-def fetch_catalog(table: pd.DataFrame, *, output_dir="output", start_date=None, end_date=None,
-                  format="csv", overwrite=False, quiet=False, manifest=True) -> pd.DataFrame:
-    """Download every row of a catalog table; return one FetchRecord row per item."""
-    opts = FetchOptions(str(output_dir), start_date, end_date, format, overwrite, quiet)
+def estimate_catalog(table: pd.DataFrame, *, network: bool = True) -> pd.DataFrame:
+    """Add ``EstRecords`` / ``EstNote``. NWDP: exact server count (one cheap request each);
+    anything else: unknown (None), never a guess."""
+    out = table.copy()
+    est, note = [], []
+    client = NwdpAdapter()._client() if network and (out["Source"] == "NWDP").any() else None
+    for _, r in out.iterrows():
+        if r["Source"] == "NWDP" and client is not None:
+            n = client.count_records(str(r["ID"]))
+            est.append(n)
+            note.append("server-reported total for the whole resource (date range is applied after download)"
+                        if n is not None else "count unavailable")
+        elif r["Source"] == "NWDP":
+            est.append(None); note.append("not requested")
+        else:
+            est.append(None); note.append("unknown: source does not report counts")
+    out["EstRecords"], out["EstNote"] = est, note
+    out.attrs.update(table.attrs)
+    return out
+
+
+def _find_prior(output_dir, rec_key, lo, hi):
+    """Return a saved item from an earlier manifest with the same ID and requested range whose file still exists."""
+    for mf in sorted(Path(output_dir).glob("manifest*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            items = json.loads(mf.read_text()).get("items", [])
+        except Exception:
+            continue
+        for it in items:
+            if (it.get("source"), it.get("id")) == rec_key and (it.get("status") == "saved" or (it.get("status") == "skipped" and it.get("reused"))) \
+               and it.get("req_start") == lo and it.get("req_end") == hi \
+               and it.get("complete") is not False and it.get("path") and Path(it["path"]).exists():
+                return it
+    return None
+
+
+def fetch_catalog(table: pd.DataFrame, *, output_dir="output", period=None, start_date=None, end_date=None,
+                  format="csv", overwrite=False, quiet=True, manifest=True, rc_discharge=True,
+                  resume=True, progress=None, cancel=None) -> pd.DataFrame:
+    """Download every row of a catalog table; return one FetchRecord row per item.
+
+    Never prints. Pass ``progress(event_dict)`` to follow the run and a
+    ``threading.Event`` as ``cancel`` to stop it between pages/items.
+    """
+    if period is not None:
+        start_date, end_date = parse_period(period)
+    opts = FetchOptions(str(output_dir), start_date, end_date, format, overwrite, quiet,
+                        rc_discharge, resume, progress, cancel)
     os.makedirs(opts.output_dir, exist_ok=True)
     records = []
-    for _, row in table.iterrows():
+    n = len(table)
+    for i, (_, row) in enumerate(table.iterrows(), 1):
         src = row["Source"]
-        if src not in ADAPTERS:
-            records.append(FetchRecord(str(src), str(row.get("ID")), str(row.get("Title")),
-                                       status="error", error=f"no adapter for source {src!r}"))
+        base = FetchRecord(str(src), str(row.get("ID")), str(row.get("Title")),
+                           req_start=start_date, req_end=end_date)
+        if cancel is not None and cancel.is_set():
+            base.status, base.error = "cancelled", "cancelled before start"
+            records.append(base)
             continue
-        rec = ADAPTERS[src]().fetch(row, opts)
-        if not quiet:
-            n = "?" if rec.records is None else rec.records
-            print(f"[{rec.source}] {rec.title}: {rec.status} ({n} records)"
-                  + (f" - {rec.error}" if rec.error else ""))
+        if src not in ADAPTERS:
+            base.status, base.error = "error", f"no adapter for source {src!r}"
+            records.append(base)
+            continue
+        _emit(opts, "item_start", base, index=i, total=n)
+        prior = None if (overwrite or not resume) else _find_prior(opts.output_dir, (str(src), str(row.get("ID"))), start_date, end_date)
+        if prior:
+            base.status, base.path, base.records, base.reused = "skipped", prior["path"], prior.get("records"), True
+            base.start, base.end = prior.get("start"), prior.get("end")
+            base.error = "already downloaded for this exact request (see earlier manifest); use overwrite=True to redo"
+            rec = base
+        else:
+            rec = ADAPTERS[src]().fetch(row, opts)
+            rec.req_start, rec.req_end = start_date, end_date
+        _emit(opts, "item_done", rec, index=i, total=n, status=rec.status, records=rec.records)
         records.append(rec)
     out = pd.DataFrame([asdict(r) for r in records])
     out.attrs["swift_type"] = "fetch_results"
@@ -426,20 +604,22 @@ def write_manifest(opts: FetchOptions, table: pd.DataFrame, records) -> str:
     for r in records:
         if r.source == "NWDP":
             verify["NWDP"] = "TLS certificate verification DISABLED (verify=False)"
+    prov = table.attrs.get("query")
     doc = {
         "hydroswift": _version(),
         "created": _now(),
-        "query": table.attrs.get("query"),
-        "source_status": table.attrs.get("source_status"),
+        "query": prov if prov is not None else "search provenance unavailable (table was filtered or built by hand)",
+        "source_status": table.attrs.get("source_status") or "search provenance unavailable",
         "search_partial": table.attrs.get("partial"),
-        "options": {k: v for k, v in asdict(opts).items()},
+        "options": {"output_dir": opts.output_dir, "start_date": opts.start_date, "end_date": opts.end_date,
+                    "format": opts.format, "overwrite": opts.overwrite, "rc_discharge": opts.rc_discharge,
+                    "resume": opts.resume},
         "security_notes": verify,
         "items": [asdict(r) for r in records],
     }
     path = Path(opts.output_dir) / "manifest.json"
-    # never overwrite earlier manifests: keep a history
     if path.exists():
-        stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%dT%H%M%S%f")
         path = Path(opts.output_dir) / f"manifest_{stamp}.json"
     path.write_text(json.dumps(doc, indent=2, default=str))
     return str(path)
