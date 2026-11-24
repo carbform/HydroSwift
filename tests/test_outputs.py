@@ -77,3 +77,89 @@ def test_plot_warns_when_capped(tmp_path):
     with pytest.warns(UserWarning, match="plotting the first 2"):
         paths = out.plot(pd.DataFrame(rows), tmp_path / "p", max_series=2)
     assert len(paths) == 2
+
+
+def test_plot_kinds_hydrograph_hyetograph_rating_curve_compare_fdc(tmp_path):
+    times = pd.date_range("2024-06-01", periods=10, freq="1D").astype(str)
+    tidy_df = pd.DataFrame({
+        "time": list(times) * 3,
+        "value": [10.0 + i * 0.5 for i in range(10)] + [100.0 + i * 20.0 for i in range(10)] + [5.0 + i for i in range(10)],
+        "variable": ["water_level"] * 10 + ["discharge"] * 10 + ["rainfall"] * 10,
+        "unit": ["m"] * 10 + ["m3/s"] * 10 + ["mm"] * 10,
+        "station_id": ["001-CDBNG"] * 30,
+        "station_name": ["Shimoga"] * 30,
+        "source": ["CWC"] * 30,
+        "lat": [13.92] * 30,
+        "lon": [75.58] * 30,
+        "method": ["observed"] * 30,
+        "flag": [None] * 30,
+        "file": ["mock.csv"] * 30,
+    })
+
+    # 1. Dual hydrograph
+    hg_paths = out.plot(tidy_df, tmp_path / "hg", kind="hydrograph")
+    assert len(hg_paths) == 1 and hg_paths[0].endswith(".png")
+
+    # 2. Hyetograph
+    hy_paths = out.plot(tidy_df, tmp_path / "hy", kind="hyetograph")
+    assert len(hy_paths) == 1 and hy_paths[0].endswith(".png")
+
+    # 3. Rating curve
+    rc_paths = out.plot(tidy_df, tmp_path / "rc", kind="rating_curve")
+    assert len(rc_paths) == 1 and rc_paths[0].endswith(".png")
+
+    # 4. Multi-station comparison
+    tidy_cmp = pd.concat([
+        tidy_df,
+        tidy_df.assign(station_id="002-TEST", station_name="Test Station", value=tidy_df["value"] * 1.2),
+    ], ignore_index=True)
+    cmp_paths = out.plot(tidy_cmp, tmp_path / "cmp", kind="compare", variable="water_level")
+    assert len(cmp_paths) == 1 and cmp_paths[0].endswith(".png")
+
+    # 5. Flow duration curve (FDC)
+    fdc_paths = out.plot(tidy_df, tmp_path / "fdc", kind="fdc")
+    assert len(fdc_paths) == 1 and fdc_paths[0].endswith(".png")
+
+    # 6. Return figure directly when output_dir is None
+    fig = out.plot(tidy_df, output_dir=None, kind="hydrograph")
+    assert fig is not None
+
+
+def test_map_creation_from_catalog_and_tidy(tmp_path):
+    import hydroswift as hs
+
+    # From catalog
+    cat = pd.DataFrame([
+        {
+            "ID": "001-CDBNG",
+            "Title": "Shimoga",
+            "lat": 13.92,
+            "lon": 75.58,
+            "Source": "CWC",
+            "Location": "Krishna, Karnataka",
+            "Variable": "Water Level",
+        },
+        {
+            "ID": "048-HDCHENNAI",
+            "Title": "Rayachoti",
+            "lat": 14.06,
+            "lon": 78.75,
+            "Source": "WRIS",
+            "Location": "Pennar, Andhra Pradesh",
+            "Variable": "Rainfall",
+        },
+    ])
+    map_path = tmp_path / "cat_map.html"
+    hmap = hs.map(cat, output=map_path)
+    assert hmap.stations_count == 2
+    assert map_path.exists()
+    assert "Shimoga" in map_path.read_text()
+    assert "Rayachoti" in map_path.read_text()
+    assert "leaflet" in map_path.read_text()
+    assert "<iframe" in hmap._repr_html_()
+
+    # Refuse when no coordinates
+    no_coords = pd.DataFrame([{"ID": "X", "Title": "X", "lat": None, "lon": None}])
+    with pytest.raises(ValueError, match="No stations with geographic coordinates"):
+        hs.map(no_coords, output=tmp_path / "none.html")
+

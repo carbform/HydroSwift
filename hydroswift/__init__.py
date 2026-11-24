@@ -17,6 +17,8 @@ from .api import (  # noqa: E402
     load,
     merge,
     plot,
+    map,
+    map_data,
     save_catalog,
     load_catalog,
     refresh_cwc_stations,

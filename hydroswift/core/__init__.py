@@ -25,8 +25,13 @@ from .tidy import (
     tidy_wris,
 )
 from .outputs import (
+    merge,
+    plot,
     merge_run,
     plot_run,
+    create_map,
+    map_data,
+    HydroMap,
 )
 
 __all__ = [
@@ -50,6 +55,11 @@ __all__ = [
     "normalise_unit",
     "infer_variable",
     "tidy_wris",
+    "merge",
+    "plot",
     "merge_run",
     "plot_run",
+    "create_map",
+    "map_data",
+    "HydroMap",
 ]

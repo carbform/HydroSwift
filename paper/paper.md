@@ -55,14 +55,14 @@ HydroSwift implements a cohesive end-to-end scientific pipeline:
 * **Universal Tidy Standardization (`load`)**: Transforms heterogeneous raw records (CKAN tables, sub-daily telemetry, and REST JSON) into a single, standardized tidy long DataFrame (`time`, `value`, `variable`, `unit`, `station_id`, `station_name`, `lat`, `lon`, `source`, `agency`, `method`, `flag`). Physical units are normalized (e.g., mm, m, $\text{m}^3/\text{s}$, BCM, $^\circ\text{C}$).
 * **Operational Flood Forecasting & Rating Curves**: For CWC river gauging stations, HydroSwift incorporates hydraulic rating curves calibrated under the GUARDIAN dataset methodology [@patidar2024guardian] to estimate river discharge ($\text{m}^3/\text{s}$) from river stage.
 * **Reservoir Storage Monitoring (RSMS)**: Automates real-time daily storage snapshots across 180+ major national reservoirs and includes layout-preserving PDF table extraction to backfill decades of historical weekly bulletin archives.
-* **Export & Visualization (`merge` and `plot`)**: Directly compiles fetched station observations into compressed Parquet, geospatial GeoPackage (`*.gpkg`), or CSV formats, and generates multi-station exploratory hydrographs and time-series plots.
-* **Single-Screen Workbench GUI**: HydroSwift includes an offscreen-tested PyQt5 desktop workbench providing interactive search filtering, provenance tracking, download progress bars, and embedded plotting.
+* **Export, Hydrological Plotting & Map Layers (`merge`, `plot`, `map`)**: Directly compiles observations into compressed Parquet, geospatial GeoPackage (`*.gpkg`), or CSV formats. Generates rich hydrological figures including dual-axis hydrographs (stage & discharge), precipitation hyetographs, hydraulic rating curves ($H-Q$), and flow duration curves (FDCs) with CWC flood threshold alert lines (Warning, Danger, HFL). Produces standalone interactive Leaflet map layers with multi-basemap switching, marker clustering, flood alert highlights, and custom GeoJSON catchment overlays.
+* **Single-Screen Workbench GUI**: HydroSwift includes an offscreen-tested PyQt5 desktop workbench providing interactive search filtering, provenance tracking, download progress bars, embedded plotting, and one-click station mapping.
 
 # Modular Architecture
 
 HydroSwift is architected into clean, decoupled layers:
 
-1. **`hydroswift.core`**: Houses the engine orchestration (`search_catalog`, `fetch_catalog`, `manifest`), the universal tidy data model (`load`, unit normalizers, canonical vocabularies), and consolidated export utilities (`merge`, `plot`).
+1. **`hydroswift.core`**: Houses the engine orchestration (`search_catalog`, `fetch_catalog`, `manifest`), the universal tidy data model (`load`, unit normalizers, canonical vocabularies), and consolidated export and visualization utilities (`merge`, `plot`, `map`).
 2. **`hydroswift.sources`**: Pluggable source adapters (`nwdp`, `cwc_ffs`, `cwc_rsms`, `wris_api`) implementing independent client protocols, authentication, and endpoint pagination.
 3. **`hydroswift.gui`**: Single-screen reactive workbench implementing the Find-Review-Get-Use workflow.
 4. **`hydroswift.experimental`**: Staged research components, including multi-source satellite altimetry validation linking Surface Water and Ocean Topography (SWOT) KaRIn passes with in-situ reservoir storage bulletins.

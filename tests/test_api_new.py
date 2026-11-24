@@ -155,3 +155,5 @@ def test_cli_show_merge_plot_on_a_fetched_folder(tmp_path, capsys):
     assert len(pd.read_csv(tmp_path / "all.csv")) == 3
     assert cli_main(["plot", str(tmp_path), str(tmp_path / "plots")]) == 0
     assert len(list((tmp_path / "plots").glob("*.png"))) == 1
+    assert cli_main(["map", str(tmp_path), "--out", str(tmp_path / "map.html")]) == 0
+    assert (tmp_path / "map.html").exists()

@@ -19,7 +19,7 @@ from . import APP_NAME, APP_TAGLINE, VERSION
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="hyswift",
-        description=f"{APP_NAME} - {APP_TAGLINE}\n\nWorkflow: search -> get -> show / merge / plot (run `hyswift` alone for guided mode).",
+        description=f"{APP_NAME} - {APP_TAGLINE}\n\nWorkflow: search -> get -> show / merge / plot / map (run `hyswift` alone for guided mode).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--version", action="version", version=f"HydroSwift {VERSION}")
@@ -54,10 +54,25 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("path")
     m.add_argument("output")
 
-    pl = sub.add_parser("plot", help="Plot fetched data")
-    pl.add_argument("path")
-    pl.add_argument("output_dir", nargs="?", default="output/plots")
-    pl.add_argument("--variable")
+    pl = sub.add_parser("plot", help="Plot fetched data (timeseries, hydrograph, hyetograph, rating_curve, compare, fdc)")
+    pl.add_argument("path", help="output directory, manifest*.json, or catalog JSON")
+    pl.add_argument("output_dir", nargs="?", default="output/plots", help="folder to save plot images (default: output/plots)")
+    pl.add_argument("--kind", choices=["timeseries", "hydrograph", "hyetograph", "rating_curve", "compare", "fdc"],
+                    default="timeseries", help="type of hydrological visualization (default: timeseries)")
+    pl.add_argument("--variable", help="filter to a single variable")
+    pl.add_argument("--interactive", action="store_true", help="generate interactive Plotly HTML figures")
+    pl.add_argument("--no-thresholds", action="store_true", help="disable Warning/Danger flood alert lines")
+
+    mp = sub.add_parser("map", help="Generate interactive Leaflet map of stations")
+    mp.add_argument("path", help="search catalog JSON, tidy data, or output directory")
+    mp.add_argument("--out", default="output/map.html", help="HTML file to create (default: output/map.html)")
+    mp.add_argument("--basemap", choices=["osm", "carto-light", "carto-dark", "satellite"], default="osm",
+                    help="default basemap tile layer (default: osm)")
+    mp.add_argument("--color-by", choices=["source", "status"], default="source",
+                    help="marker coloring mode (default: source)")
+    mp.add_argument("--no-cluster", action="store_true", help="disable marker clustering")
+    mp.add_argument("--no-alerts", action="store_true", help="disable Warning/Danger flood alert highlights")
+    mp.add_argument("--layer", action="append", dest="layers", help="GeoJSON or Shapefile path to overlay (repeatable)")
 
     r = sub.add_parser("rsms", help="CWC reservoir tools (RSMS)")
     rs = r.add_subparsers(dest="rsms_command", required=True)
@@ -180,8 +195,34 @@ def run(args) -> int:
         return 0
 
     if cmd == "plot":
-        paths = api.plot(args.path, args.output_dir, variable=args.variable)
-        print(f"Wrote {len(paths)} figures to {args.output_dir}")
+        paths = api.plot(
+            args.path,
+            args.output_dir,
+            kind=getattr(args, "kind", "timeseries"),
+            variable=getattr(args, "variable", None),
+            interactive=getattr(args, "interactive", False),
+            thresholds=not getattr(args, "no_thresholds", False),
+        )
+        print(f"Wrote {len(paths)} figure(s) to {args.output_dir}")
+        return 0
+
+    if cmd == "map":
+        data = args.path
+        if data.endswith(".json"):
+            try:
+                data = api.load_catalog(args.path)
+            except Exception:
+                data = args.path
+        hmap = api.map(
+            data,
+            output=args.out,
+            basemap=args.basemap,
+            color_by=args.color_by,
+            cluster=not args.no_cluster,
+            alert_highlight=not args.no_alerts,
+            geojson_layers=args.layers,
+        )
+        print(f"Map created with {hmap.stations_count} station(s) -> {hmap.path}")
         return 0
 
     if cmd == "rsms":

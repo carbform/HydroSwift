@@ -134,7 +134,8 @@ class Workbench(QWidget):
         brow = QHBoxLayout()
         self.add_btn = QPushButton("Add selected to request"); self.add_btn.clicked.connect(self.add_selected)
         self.addall_btn = QPushButton("Add all shown"); self.addall_btn.clicked.connect(self.add_all_shown)
-        brow.addWidget(self.add_btn); brow.addWidget(self.addall_btn); brow.addStretch()
+        self.map_search_btn = QPushButton("Map search results"); self.map_search_btn.clicked.connect(self.do_map_search)
+        brow.addWidget(self.add_btn); brow.addWidget(self.addall_btn); brow.addWidget(self.map_search_btn); brow.addStretch()
         rl.addLayout(brow)
 
         # 3 Get
@@ -181,10 +182,11 @@ class Workbench(QWidget):
         ul.addWidget(self.run_summary)
         urow = QHBoxLayout()
         self.plot_btn = QPushButton("Plot"); self.plot_btn.clicked.connect(self.do_plot)
+        self.map_btn = QPushButton("Map stations"); self.map_btn.clicked.connect(self.do_map)
         self.merge_btn = QPushButton("Merge to one file"); self.merge_btn.clicked.connect(self.do_merge)
         self.open_btn = QPushButton("Open folder"); self.open_btn.clicked.connect(self.open_folder)
         self.manifest_label = QLabel("")
-        for b in (self.plot_btn, self.merge_btn, self.open_btn):
+        for b in (self.plot_btn, self.map_btn, self.merge_btn, self.open_btn):
             urow.addWidget(b)
         urow.addWidget(self.manifest_label); urow.addStretch()
         ul.addLayout(urow)
@@ -210,12 +212,13 @@ class Workbench(QWidget):
         self.search_btn.setEnabled(not busy)
         self.add_btn.setEnabled(not busy and bool(self.table.selectionModel().selectedRows()))
         self.addall_btn.setEnabled(not busy and bool(self._shown))
+        self.map_search_btn.setEnabled(not busy and bool(self._shown))
         self.remove_btn.setEnabled(not busy and bool(self.basket_table.selectionModel().selectedRows()))
         self.clear_btn.setEnabled(not busy and have_basket)
         self.est_btn.setEnabled(not busy and have_basket)
         self.get_btn.setEnabled(not busy and have_basket)
         self.cancel_btn.setEnabled(busy and self._cancel is not None)
-        for b in (self.plot_btn, self.merge_btn):
+        for b in (self.plot_btn, self.map_btn, self.merge_btn):
             b.setEnabled(not busy and have_run)
         self.open_btn.setEnabled(True)
 
@@ -443,6 +446,36 @@ class Workbench(QWidget):
         self._log(f"Wrote {len(paths)} figure(s) to {out}", "success" if paths else "warning")
         if paths:
             self.open_path(out)
+
+    def do_map(self):
+        run = self.run
+        out = str(Path(self.out_edit.text()) / "map.html")
+
+        def job(emit, cancel):
+            return _api.map(run, output=out)
+
+        self._start(job, lambda hmap: self._on_mapped(hmap, out), "Mapping")
+
+    def do_map_search(self):
+        if not self._shown or self.catalog is None or self.catalog.empty:
+            return
+        cat = self.catalog.iloc[self._shown]
+        out = str(Path(self.out_edit.text()) / "search_map.html")
+
+        def job(emit, cancel):
+            return _api.map(cat, output=out)
+
+        self._start(job, lambda hmap: self._on_mapped(hmap, out), "Mapping")
+
+    def _on_mapped(self, hmap, out):
+        n = getattr(hmap, "stations_count", 0)
+        self._log(f"Created map with {n} station(s) -> {out}", "success" if n else "warning")
+        if n and Path(out).exists():
+            import webbrowser
+            try:
+                webbrowser.open(f"file://{Path(out).resolve()}")
+            except Exception:
+                pass
 
     def do_merge(self):
         run = self.run

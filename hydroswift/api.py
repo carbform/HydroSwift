@@ -32,7 +32,8 @@ Find -> Review -> Get -> Use
     run = hs.fetch(cat, output_dir="output", period=("2020", "2022"))
     data = hs.load(run)             # tidy: time,value,variable,unit,station_id,...
     hs.merge(run, "all.parquet")    # csv | parquet | gpkg
-    hs.plot(run, "plots/")          # one PNG per station and variable
+    hs.plot(run, "plots/")          # hydrographs, rating curves, hyetographs
+    hs.map(cat, "map.html")         # interactive Leaflet map with alert layers
 
 Reservoirs (CWC RSMS):  hs.rsms.daily() / bulletins() / backfill() / build_database()
 Utilities:  hs.help()  hs.cite()  hs.coffee()  hs.save_catalog(cat, path)  hs.load_catalog(path)
@@ -119,9 +120,18 @@ def merge(run, output="output/merged.parquet"):
 
 
 def plot(run, output_dir="output/plots", **kw):
-    """Plot one time series figure per station and variable. Returns the list of PNG paths."""
-    from .core.outputs import plot_run as _plot
+    """Plot hydrological visualizations (timeseries, hydrograph, hyetograph, rating_curve, compare, fdc)."""
+    from .core.outputs import plot as _plot
     return _plot(run, output_dir, **kw)
+
+
+def map(data, output="output/map.html", **kw):
+    """Generate an interactive Leaflet map from a catalog table or tidy data."""
+    from .core.outputs import create_map as _map
+    return _map(data, output=output, **kw)
+
+
+map_data = map
 
 
 def save_catalog(table, path):
