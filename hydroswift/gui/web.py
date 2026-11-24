@@ -343,13 +343,13 @@ def main():
         mcol1, mcol2 = st.columns([3, 1])
         basemap = mcol1.selectbox(
             "Basemap Style",
-            ["osm", "carto-light", "carto-dark", "satellite"],
-            index=1 if not dark else 2,
+            ["osm", "topo", "satellite", "opentopo"],
+            index=0,
             format_func=lambda x: {
                 "osm": "OpenStreetMap",
-                "carto-light": "CartoDB Positron (Clean Light)",
-                "carto-dark": "CartoDB Dark Matter (Sleek Dark)",
+                "topo": "Esri Topographic",
                 "satellite": "Esri World Imagery (Satellite)",
+                "opentopo": "OpenTopoMap",
             }[x],
         )
         color_by = mcol2.selectbox("Color Markers By", ["source", "status"], index=0)
@@ -369,6 +369,7 @@ def main():
                 geojson_layers.append({
                     "name": "India Boundary",
                     "geojson": ind_geo,
+                    "interactive": False,
                     "style": {"color": "#374151" if not dark else "#9ca3af", "weight": 2.2, "fillOpacity": 0.0},
                 })
 
@@ -666,6 +667,7 @@ def main():
                     res_geojson_layers.append({
                         "name": "India Boundary",
                         "geojson": ind_geo,
+                        "interactive": False,
                         "style": {"color": "#4b5563" if not dark else "#9ca3af", "weight": 2.0, "fillOpacity": 0.0},
                     })
 
@@ -673,7 +675,7 @@ def main():
                 res_map = create_map(
                     df_calc,
                     output=None,
-                    basemap="carto-light" if not dark else "carto-dark",
+                    basemap="osm",
                     color_by="status",
                     cluster=False,
                     bounds=res_bounds,

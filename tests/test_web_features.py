@@ -114,6 +114,11 @@ def test_create_map_with_reservoir_dataframe():
     assert "METTUR" in html
     assert "Live Storage" in html
     assert "Live Capacity" in html
+    assert "cartocdn" not in html
+    assert "boundaryPane" in html
+    assert "stationPane" in html
+    assert "stopPropagation" in html
+    assert "Esri Topographic" in html
 
 
 def test_choose_folder_mock(tmp_path):

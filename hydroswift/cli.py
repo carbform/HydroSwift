@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     mp = sub.add_parser("map", help="Generate interactive Leaflet map of stations")
     mp.add_argument("path", help="search catalog JSON, tidy data, or output directory")
     mp.add_argument("--out", default="output/map.html", help="HTML file to create (default: output/map.html)")
-    mp.add_argument("--basemap", choices=["osm", "carto-light", "carto-dark", "satellite"], default="osm",
+    mp.add_argument("--basemap", choices=["osm", "topo", "satellite", "opentopo", "carto-light", "carto-dark"], default="osm",
                     help="default basemap tile layer (default: osm)")
     mp.add_argument("--color-by", choices=["source", "status"], default="source",
                     help="marker coloring mode (default: source)")

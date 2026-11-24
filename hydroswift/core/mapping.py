@@ -326,6 +326,10 @@ def create_map(
     if not stations and not geojson_layers and bounds is None:
         raise ValueError("No stations with geographic coordinates (lat/lon) found in input data.")
 
+    # Backward compatibility for legacy basemap names
+    if basemap in ("carto-light", "carto-dark"):
+        basemap = "osm"
+
     # Compute bounding box
     if bounds is not None:
         c_lat = (bounds[0][0] + bounds[1][0]) / 2 if center is None else center[0]
@@ -441,31 +445,31 @@ def create_map(
     const colorMode = "{color_by}";
     const clusterEnabled = {"true" if cluster else "false"};
 
-    // Basemaps
+    // Basemaps (CartoDB removed, replaced with Esri Topo & OpenTopoMap)
     const osm = L.tileLayer("https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png", {{
       maxZoom: 19, attribution: "© OpenStreetMap contributors"
     }});
-    const cartoLight = L.tileLayer("https://{{s}}.basemaps.cartocdn.com/light_all/{{z}}/{{x}}/{{y}}{{r}}.png", {{
-      maxZoom: 20, attribution: "© CartoDB, © OpenStreetMap"
-    }});
-    const cartoDark = L.tileLayer("https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png", {{
-      maxZoom: 20, attribution: "© CartoDB, © OpenStreetMap"
+    const topo = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{{z}}/{{y}}/{{x}}", {{
+      maxZoom: 19, attribution: "© Esri Topographic"
     }});
     const satellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}", {{
-      maxZoom: 19, attribution: "© Esri"
+      maxZoom: 19, attribution: "© Esri World Imagery"
+    }});
+    const opentopo = L.tileLayer("https://{{s}}.tile.opentopomap.org/{{z}}/{{x}}/{{y}}.png", {{
+      maxZoom: 17, attribution: "© OpenTopoMap contributors"
     }});
 
     const baseMaps = {{
       "OpenStreetMap": osm,
-      "CartoDB Light": cartoLight,
-      "CartoDB Dark": cartoDark,
-      "Satellite (Esri)": satellite
+      "Esri Topographic": topo,
+      "Esri Satellite": satellite,
+      "OpenTopoMap": opentopo
     }};
 
     let defaultLayer = osm;
-    if ("{basemap}" === "carto-light") defaultLayer = cartoLight;
-    if ("{basemap}" === "carto-dark") defaultLayer = cartoDark;
     if ("{basemap}" === "satellite") defaultLayer = satellite;
+    if ("{basemap}" === "topo") defaultLayer = topo;
+    if ("{basemap}" === "opentopo") defaultLayer = opentopo;
 
     const map = L.map("map", {{
       layers: [defaultLayer],
@@ -473,13 +477,55 @@ def create_map(
       zoom: {initial_zoom}
     }});
 
+    // Custom map panes for proper z-indexing:
+    // boundaryPane (zIndex 350) sits under vector overlayPane (400) and stationPane (650)
+    map.createPane('boundaryPane');
+    map.getPane('boundaryPane').style.zIndex = 350;
+    map.createPane('stationPane');
+    map.getPane('stationPane').style.zIndex = 650;
+
     if (bounds && bounds[0][0] !== bounds[1][0]) {{
       map.fitBounds(bounds, {{ padding: [60, 60] }});
     }}
 
     L.control.scale({{ metric: true, imperial: false }}).addTo(map);
 
-    // Grouping markers by Source
+    const overlayMaps = {{}};
+
+    // 1. Add background custom GeoJSON overlay layers FIRST so they render beneath markers
+    customLayers.forEach(lyr => {{
+      const defaultStyle = {{
+        color: "#3b82f6",
+        weight: 2,
+        opacity: 0.7,
+        fillColor: "#60a5fa",
+        fillOpacity: 0.15
+      }};
+      const layerStyle = Object.assign({{}}, defaultStyle, lyr.style || {{}});
+      const isBoundary = lyr.name.toLowerCase().includes("india") || lyr.name.toLowerCase().includes("boundary");
+      const isInteractive = lyr.interactive !== undefined ? lyr.interactive : !isBoundary;
+
+      const geoLayer = L.geoJSON(lyr.geojson, {{
+        pane: 'boundaryPane',
+        interactive: isInteractive,
+        style: layerStyle,
+        onEachFeature: function(feature, layer) {{
+          if (isInteractive && feature.properties) {{
+            let content = "<div style='font-size:12px; max-height:220px; overflow-y:auto;'><strong>Layer: " + lyr.name + "</strong><br/>";
+            for (let k in feature.properties) {{
+              if (feature.properties[k] !== null && feature.properties[k] !== undefined) {{
+                content += "<b>" + k + "</b>: " + feature.properties[k] + "<br/>";
+              }}
+            }}
+            content += "</div>";
+            layer.bindPopup(content);
+          }}
+        }}
+      }}).addTo(map);
+      overlayMaps[lyr.name] = geoLayer;
+    }});
+
+    // 2. Grouping markers by Source and adding to stationPane (zIndex 650)
     const sourceGroups = {{}};
     const markerIndex = {{}};
 
@@ -518,12 +564,20 @@ def create_map(
       }}
 
       const marker = L.circleMarker([s.lat, s.lon], {{
+        pane: 'stationPane',
         radius: rad,
         fillColor: mColor,
         color: strokeColor,
         weight: 1.5,
         opacity: 1,
         fillOpacity: 0.85
+      }});
+
+      marker.on('click', function(e) {{
+        if (e.originalEvent) {{
+          e.originalEvent.stopPropagation();
+        }}
+        L.DomEvent.stopPropagation(e);
       }});
 
       // Popup content
@@ -581,39 +635,10 @@ def create_map(
       markerIndex[s.name.toLowerCase()] = marker;
     }});
 
-    // Add source groups to map
-    const overlayMaps = {{}};
+    // Add source groups to map on top
     Object.keys(sourceGroups).forEach(src => {{
       sourceGroups[src].addTo(map);
       overlayMaps[`Stations: ${{src}}`] = sourceGroups[src];
-    }});
-
-    // Add custom GeoJSON overlay layers
-    customLayers.forEach(lyr => {{
-      const defaultStyle = {{
-        color: "#3b82f6",
-        weight: 2,
-        opacity: 0.7,
-        fillColor: "#60a5fa",
-        fillOpacity: 0.15
-      }};
-      const layerStyle = Object.assign({{}}, defaultStyle, lyr.style || {{}});
-      const geoLayer = L.geoJSON(lyr.geojson, {{
-        style: layerStyle,
-        onEachFeature: function(feature, layer) {{
-          if (feature.properties) {{
-            let content = "<div style='font-size:12px; max-height:220px; overflow-y:auto;'><strong>Layer: " + lyr.name + "</strong><br/>";
-            for (let k in feature.properties) {{
-              if (feature.properties[k] !== null && feature.properties[k] !== undefined) {{
-                content += "<b>" + k + "</b>: " + feature.properties[k] + "<br/>";
-              }}
-            }}
-            content += "</div>";
-            layer.bindPopup(content);
-          }}
-        }}
-      }}).addTo(map);
-      overlayMaps[lyr.name] = geoLayer;
     }});
 
     L.control.layers(baseMaps, overlayMaps, {{ collapsed: true }}).addTo(map);
