@@ -98,4 +98,4 @@ Dedicated national reservoir storage monitoring module:
 
 * **Help Popover**: Quick reference workflow guide available from the top navigation bar.
 * **About Popover**: Project overview, author profiles, and official API references.
-* **Credits Footer**: Permanent links to [carbform](https://github.com/carbform) ([carbform.github.io](https://carbform.github.io)) and [Bharatkreddy](https://github.com/Bharatkreddy), official government API documentation, and statutory disclaimer.
+* **Credits Footer**: Permanent links to [carbform](https://github.com/carbform) ([carbform.github.io](https://carbform.github.io)) and [Bharath Reddy](https://github.com/bharathk113), official government API documentation, and statutory disclaimer.

@@ -157,7 +157,7 @@ Full documentation is available at **[hydroswift.readthedocs.io](https://hydrosw
 ## Authors & Credits
 
 * **carbform** — [carbform.github.io](https://carbform.github.io) · [GitHub: @carbform](https://github.com/carbform)
-* **Bharatkreddy** — [GitHub: @Bharatkreddy](https://github.com/Bharatkreddy)
+* **Bharath Reddy** — [GitHub: @bharathk113](https://github.com/bharathk113)
 
 ---
 

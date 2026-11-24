@@ -232,7 +232,7 @@ def main():
                 "**HydroSwift** is an open-source hydrological data engine and visualization studio for Indian water resources.\n\n"
                 "**Authors & Credits**:\n"
                 "- **carbform** ([carbform.github.io](https://carbform.github.io) · [GitHub Profile](https://github.com/carbform))\n"
-                "- **Bharatkreddy** ([GitHub Profile](https://github.com/Bharatkreddy))\n"
+                "- **Bharath Reddy** ([GitHub Profile](https://github.com/bharathk113))\n"
                 "- **Source Code**: [carbform/HydroSwift on GitHub](https://github.com/carbform/HydroSwift)\n\n"
                 "**Official Data Sources & APIs**:\n"
                 "- [CWC Flood Forecasting System (FFS)](https://ffs.india-water.gov.in/)\n"

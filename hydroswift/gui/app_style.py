@@ -39,7 +39,7 @@ def get_credits_html(dark: bool = False) -> str:
         f'<a href="https://github.com/carbform/HydroSwift" target="_blank" rel="noopener">GitHub Repository</a> &nbsp;·&nbsp; '
         f'Developed by <a href="https://github.com/carbform" target="_blank" rel="noopener">carbform</a> '
         f'(<a href="https://carbform.github.io" target="_blank" rel="noopener">website</a>) &nbsp;&amp;&nbsp; '
-        f'<a href="https://github.com/Bharatkreddy" target="_blank" rel="noopener">Bharatkreddy</a>'
+        f'<a href="https://github.com/bharathk113" target="_blank" rel="noopener">bharathk113</a>'
         f'<div style="margin-top: 0.5rem; font-size: 0.76rem; letter-spacing: 0.04em;">'
         f'Official APIs: '
         f'<a href="https://ffs.india-water.gov.in/" target="_blank" rel="noopener">CWC Flood Forecasting (FFS)</a> &nbsp;·&nbsp; '
