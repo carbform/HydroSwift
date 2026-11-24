@@ -13,9 +13,24 @@ Design Language:
 
 from __future__ import annotations
 
+import importlib
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Ensure fresh in-memory modules under persistent Streamlit servers
+for _mod in [
+    "hydroswift.core.boundaries",
+    "hydroswift.core.mapping",
+    "hydroswift.sources.cwc_rsms.client",
+    "hydroswift.sources.cwc_rsms",
+]:
+    if _mod in sys.modules:
+        try:
+            importlib.reload(sys.modules[_mod])
+        except Exception:
+            pass
 
 import numpy as np
 import pandas as pd
@@ -24,48 +39,29 @@ import streamlit.components.v1 as components
 
 import hydroswift as hs
 
-try:
-    from hydroswift.core.boundaries import (
-        INDIAN_BASINS,
-        INDIAN_STATES,
-        STANDARD_VARIABLES,
-        canonical_basin,
-        get_basin_bounds,
-        get_basins_for_state,
-        get_states_for_basin,
-        load_aquifers_geojson,
-        load_basin_geojson,
-        load_india_boundary_geojson,
-    )
-except ImportError:
-    import importlib
-    import hydroswift.core.boundaries as _b_mod
-    importlib.reload(_b_mod)
-    from hydroswift.core.boundaries import (
-        INDIAN_BASINS,
-        INDIAN_STATES,
-        canonical_basin,
-        get_basins_for_state,
-        get_states_for_basin,
-        load_basin_geojson,
-    )
-    STANDARD_VARIABLES = getattr(
-        _b_mod,
-        "STANDARD_VARIABLES",
-        [
-            "All Variables",
-            "Water level",
-            "Discharge",
-            "Rainfall",
-            "Groundwater level",
-            "Reservoir storage",
-            "Water quality",
-            "Custom...",
-        ],
-    )
-    get_basin_bounds = getattr(_b_mod, "get_basin_bounds", lambda b: [[6.5, 68.0], [37.5, 97.5]])
-    load_india_boundary_geojson = getattr(_b_mod, "load_india_boundary_geojson", lambda: {"type": "FeatureCollection", "features": []})
-    load_aquifers_geojson = getattr(_b_mod, "load_aquifers_geojson", lambda s=None: {"type": "FeatureCollection", "features": []})
+# Standard Hydrological Variables
+STANDARD_VARIABLES: List[str] = [
+    "All Variables",
+    "Water level",
+    "Discharge",
+    "Rainfall",
+    "Groundwater level",
+    "Reservoir storage",
+    "Water quality",
+    "Custom...",
+]
+
+from hydroswift.core.boundaries import (
+    INDIAN_BASINS,
+    INDIAN_STATES,
+    canonical_basin,
+    get_basin_bounds,
+    get_basins_for_state,
+    get_states_for_basin,
+    load_aquifers_geojson,
+    load_basin_geojson,
+    load_india_boundary_geojson,
+)
 from hydroswift.core.mapping import SOURCE_COLORS, create_map
 from hydroswift.gui.app_style import CREDITS, sidebar_brand, stylesheet
 from hydroswift.gui.desktop import choose_folder
@@ -259,6 +255,14 @@ def main():
             import threading
             cancel_ev = threading.Event()
 
+            # Attach Streamlit context to background threads to prevent missing ScriptRunContext
+            st_ctx = None
+            try:
+                from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+                st_ctx = get_script_run_ctx()
+            except Exception:
+                pass
+
             completed = 0
             def on_progress(evt):
                 nonlocal completed
@@ -269,8 +273,16 @@ def main():
                     s = evt.get("status") or "done"
                     recs = evt.get("records")
                     r_str = f" ({recs:,} rows)" if recs else ""
-                    prog_bar.progress(pct, text=f"[{completed}/{basket_len}] {t} → {s}{r_str}")
-                    status_text.caption(f"Downloaded {completed} of {basket_len} items ({s})")
+                    try:
+                        if st_ctx is not None:
+                            try:
+                                add_script_run_ctx(threading.current_thread(), st_ctx)
+                            except Exception:
+                                pass
+                        prog_bar.progress(pct, text=f"[{completed}/{basket_len}] {t} → {s}{r_str}")
+                        status_text.caption(f"Downloaded {completed} of {basket_len} items ({s})")
+                    except Exception:
+                        pass
 
             try:
                 period = (start_year, end_year) if start_year and end_year else None

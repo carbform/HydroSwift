@@ -239,12 +239,15 @@ class CwcRsmsClient:
                 "longitude": float(lon) if lon is not None else None,
             }
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=16) as executor:
             future_to_feat = {executor.submit(_fetch_one, f): f for f in features}
             for fut in as_completed(future_to_feat):
-                res_item = fut.result()
-                if res_item:
-                    results.append(res_item)
+                try:
+                    res_item = fut.result()
+                    if res_item:
+                        results.append(res_item)
+                except Exception as e:
+                    logger.debug("Failed extracting reservoir result: %s", e)
 
         df_new = pd.DataFrame(results)
         Console.success(f"Successfully retrieved daily records for {len(df_new)} reservoirs.")
