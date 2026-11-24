@@ -1,10 +1,4 @@
-"""Public HydroSwift package backed by the legacy ``swift_app`` source tree."""
-
-from pathlib import Path as _Path
-
-# Reuse the existing implementation modules from the legacy source directory
-# so public imports can use ``hydroswift.*`` without a risky code move.
-__path__ = [str(_Path(__file__).resolve().parent.parent / "swift_app")]
+"""HydroSwift: Fast, unified workflows for hydrological data."""
 
 __version__ = "1.0.0"
 __codename__ = "Arctic Amsterdam"
@@ -35,6 +29,7 @@ from .api import (  # noqa: E402
     coffee,
 )
 from .base_client import BaseHydrologyClient  # noqa: E402
+from . import experimental  # noqa: E402
 from ._removed import make_getattr  # noqa: E402
 
 __getattr__ = make_getattr(__name__)

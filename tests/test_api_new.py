@@ -108,7 +108,7 @@ def test_parser_has_workflow_subcommands_and_branding():
     a = p.parse_args(["search", "rainfall", "--where", "Karnataka", "--period", "2020:2022", "--source", "NWDP"])
     assert (a.command, a.query, a.location, a.period, a.sources) == ("search", "rainfall", "Karnataka", "2020:2022", ["NWDP"])
     with pytest.raises(SystemExit):
-        p.parse_args(["search", "--source", "WRIS"])  # not a source any more
+        p.parse_args(["search", "--source", "INVALID_SOURCE"])  # invalid source fails
     with pytest.raises(SystemExit):
         p.parse_args(["-b", "krishna", "-q"])  # old flat flags are gone
 
