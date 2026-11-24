@@ -370,3 +370,17 @@ def test_tidy_rsms_and_load_from_directory(tmp_path):
 def test_load_skips_failed_and_cancelled_items(tmp_path):
     out = tidy.load(pd.DataFrame([item("NWDP", "x", None, status="error"), item("NWDP", "y", None, status="cancelled")]))
     assert out.empty and out.attrs["unmapped"] == []
+
+
+def test_cross_boundary_basin_search_discovers_nwdp_state_data(nwdp):
+    # Mock NWDP organization with Karnataka State
+    session = FakeSession(
+        packages=[pkg(1)]
+    )
+    nwdp(session)
+    res = eng.search_catalog("rainfall", basin="Cauvery", sources=["NWDP"], cross_boundary=True)
+    assert len(res) > 0
+    assert (res["Source"] == "NWDP").all()
+    nw_status = [s for s in res.attrs["source_status"] if s["source"] == "NWDP"][0]
+    assert "cross-boundary" in nw_status["note"]
+

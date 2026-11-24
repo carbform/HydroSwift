@@ -199,25 +199,59 @@ class NwdpAdapter:
         from hydroswift.sources.nwdp import NwdpClient
         return NwdpClient()
 
-    def search(self, query, location):
+    def search(self, query, location, basin=None, state=None):
         from hydroswift.sources.nwdp.helpers import _parse_nwdp_title
+        from hydroswift.core.boundaries import get_states_for_basin, canonical_basin
         client = self._client()
         st = SourceStatus(self.name, endpoint=getattr(client, "SEARCH_API", None))
         org = location
         matched_on = ""
-        if location:
+        
+        # Hydrological cross-boundary resolution: if basin is supplied, or location matches a known basin
+        target_states = []
+        if basin:
+            target_states = get_states_for_basin(basin)
+            matched_on = f"basin_states({canonical_basin(basin)})"
+        elif state:
+            target_states = [state]
+            matched_on = f"state({state})"
+        elif location:
+            b_states = get_states_for_basin(location)
+            if b_states:
+                target_states = b_states
+                matched_on = f"basin_states({canonical_basin(location)})"
+
+        if target_states or location:
             try:
                 orgs = client.get_organizations()
             except Exception as e:  # pragma: no cover - defensive
                 orgs = []
                 st.note = f"organization lookup failed: {e}"
-            needle = location.lower()
-            hits = [o["name"] for o in orgs
-                    if needle in o.get("title", "").lower() or needle in o.get("name", "").lower()]
-            org = hits if hits else location
-            matched_on = "organization"
-            if not hits:
-                st.note = (st.note or "") + " no organization matched; NWDP location filter covers organizations only."
+
+            hits = []
+            if target_states:
+                for s_name in target_states:
+                    needle = s_name.lower()
+                    hits.extend([o["name"] for o in orgs
+                                 if needle in o.get("title", "").lower() or needle in o.get("name", "").lower()])
+                hits = list(dict.fromkeys(hits))  # preserve order, deduplicate
+                if hits:
+                    org = hits
+                    st.note = f"NWDP cross-boundary discovery: mapped to states {target_states}"
+                elif location:
+                    needle = location.lower()
+                    hits = [o["name"] for o in orgs
+                            if needle in o.get("title", "").lower() or needle in o.get("name", "").lower()]
+                    org = hits if hits else location
+                    matched_on = "organization"
+            else:
+                needle = location.lower()
+                hits = [o["name"] for o in orgs
+                        if needle in o.get("title", "").lower() or needle in o.get("name", "").lower()]
+                org = hits if hits else location
+                matched_on = "organization"
+                if not hits:
+                    st.note = (st.note or "") + " no organization matched; NWDP location filter covers organizations only."
         raw = client.search_datasets(query=query, org=org)
         info = getattr(client, "last_search", None) or {}
         st.ok = info.get("ok", True)
@@ -602,13 +636,13 @@ ADAPTERS = {"NWDP": NwdpAdapter, "CWC": CwcAdapter, "CWC-RSMS": RsmsAdapter, "WR
 # ---------------------------------------------------------------------------
 
 def search_catalog(query=None, location=None, sources=None, *, period=None,
-                   ids=None, basin=None, state=None) -> pd.DataFrame:
+                   ids=None, basin=None, state=None, cross_boundary: bool = False) -> pd.DataFrame:
     """Search all (or the named) sources; return a CATALOG_COLUMNS table with status in ``attrs``.
 
     ``location`` is a case-insensitive substring. For exact selection use
     ``ids`` (catalog IDs), ``basin`` or ``state`` (case-insensitive equality).
-    ``basin``/``state`` need source metadata, so only CWC can honour them;
-    NWDP is then skipped and the status says so rather than ignoring the filter.
+    If ``cross_boundary=True``, searches for a basin automatically cross-discover
+    constituent administrative state datasets in NWDP.
     ``period`` drops rows whose *known* coverage does not overlap it; rows with
     unknown coverage are kept, flagged ``CoverageKnown=False`` and counted.
     """
@@ -622,12 +656,19 @@ def search_catalog(query=None, location=None, sources=None, *, period=None,
     rows, statuses = [], []
     for n in names:
         if (basin or state) and n not in ("CWC", "WRIS"):
-            statuses.append(SourceStatus(n, note=f"skipped: exact basin/state filters need source metadata that {n} does not provide"))
-            continue
-        try:
-            r, st = ADAPTERS[n]().search(query, location)
-        except Exception as e:
-            r, st = [], SourceStatus(n, ok=False, complete=False, error=str(e))
+            if cross_boundary and n == "NWDP":
+                try:
+                    r, st = ADAPTERS[n]().search(query, location, basin=basin, state=state)
+                except Exception as e:
+                    r, st = [], SourceStatus(n, ok=False, complete=False, error=str(e))
+            else:
+                statuses.append(SourceStatus(n, note=f"skipped: exact basin/state filters need source metadata that {n} does not provide"))
+                continue
+        else:
+            try:
+                r, st = ADAPTERS[n]().search(query, location)
+            except Exception as e:
+                r, st = [], SourceStatus(n, ok=False, complete=False, error=str(e))
         if n in ("CWC", "WRIS"):
             for key, want in exact.items():
                 if want:

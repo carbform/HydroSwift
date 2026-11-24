@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 40" fill="none">
+  <rect width="40" height="40" rx="8" fill="#3d82cc"/>
+  <path d="M20 8 C20 8 11 19 11 25 C11 29.9 15 34 20 34 C25 34 29 29.9 29 25 C29 19 20 8 20 8 Z" fill="#ffffff" fill-opacity="0.95"/>
+  <path d="M21 15 L15 24 L20 24 L19 30 L25 21 L20 21 L21 15 Z" fill="#38bdf8"/>
+  <text x="50" y="27" font-family="monospace" font-size="20" font-weight="700" fill="#2c3e50">Hydro<tspan fill="#38bdf8">Swift</tspan></text>
+</svg>

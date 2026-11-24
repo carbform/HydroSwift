@@ -15,7 +15,9 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-hydroswift = ["*.csv"]
+hydroswift = ["*.csv", "data/*.geojson"]
+"hydroswift.data" = ["*.geojson"]
+"hydroswift.gui" = ["app_assets/*"]
 "hydroswift.sources.cwc_ffs" = ["*.csv"]
 swift_app = ["*.csv"]
 

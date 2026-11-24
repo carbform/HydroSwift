@@ -153,9 +153,9 @@ def refresh_cwc_stations():
 
 
 def search(query: str = None, location: str = None, sources=None, *, period=None,
-           ids=None, basin: str = None, state: str = None) -> pd.DataFrame:
+           ids=None, basin: str = None, state: str = None, cross_boundary: bool = True) -> pd.DataFrame:
     """
-    Unified discovery across NWDP, CWC flood-forecasting stations and CWC RSMS.
+    Unified discovery across NWDP, CWC flood-forecasting stations, CWC RSMS, and India-WRIS.
 
     Parameters
     ----------
@@ -166,24 +166,26 @@ def search(query: str = None, location: str = None, sources=None, *, period=None
         (NWDP: organization; CWC: basin, state, district, river). The field
         that matched is in the ``MatchedOn`` column.
     sources : list of str, optional
-        Subset of ``["NWDP", "CWC", "CWC-RSMS"]``. Default: all.
+        Subset of ``["NWDP", "CWC", "CWC-RSMS", "WRIS"]``. Default: all.
     period : (start, end) or "YYYY:YYYY", optional
         Drops rows whose known coverage does not overlap; unknown coverage is kept and flagged.
     ids, basin, state : optional
-        Exact (not substring) selection by catalog ID, basin or state. basin/state are CWC-only.
+        Exact (not substring) selection by catalog ID, basin or state.
+    cross_boundary : bool, default True
+        If True, a search by hydrological river basin will automatically discover
+        datasets from constituent administrative states in NWDP.
 
     Returns
     -------
     pd.DataFrame
         One row per dataset or station. ``df.attrs['source_status']`` lists
         per-source ok/error/complete flags and ``df.attrs['partial']`` is True
-        if any source failed or returned a truncated listing. The ``Inferred``
-        column names fields that were assumed rather than stated by the source.
+        if any source failed or returned a truncated listing.
     """
     import warnings
     from .core.engine import search_catalog
     df = search_catalog(query=query, location=location, sources=sources, period=period,
-                        ids=ids, basin=basin, state=state)
+                        ids=ids, basin=basin, state=state, cross_boundary=cross_boundary)
     for st in df.attrs["source_status"]:
         if not st["ok"] or not st["complete"]:
             warnings.warn(f"{st['source']} search incomplete: {st['error']}", stacklevel=2)

@@ -279,19 +279,24 @@ def create_map(
     HydroMap
         Interactive map object with `.save()`, `.to_html()`, and Jupyter `_repr_html_()`.
     """
-    stations = _extract_stations(data)
-    if not stations:
+    stations = _extract_stations(data) if data is not None else []
+    if not stations and not geojson_layers:
         raise ValueError("No stations with geographic coordinates (lat/lon) found in input data.")
 
     # Compute bounding box
-    lats = [s["lat"] for s in stations]
-    lons = [s["lon"] for s in stations]
-    min_lat, max_lat = min(lats), max(lats)
-    min_lon, max_lon = min(lons), max(lons)
-    bounds = [[min_lat, min_lon], [max_lat, max_lon]]
-    c_lat = (min_lat + max_lat) / 2 if center is None else center[0]
-    c_lon = (min_lon + max_lon) / 2 if center is None else center[1]
-    initial_zoom = zoom or 6
+    if stations:
+        lats = [s["lat"] for s in stations]
+        lons = [s["lon"] for s in stations]
+        min_lat, max_lat = min(lats), max(lats)
+        min_lon, max_lon = min(lons), max(lons)
+        bounds = [[min_lat, min_lon], [max_lat, max_lon]]
+        c_lat = (min_lat + max_lat) / 2 if center is None else center[0]
+        c_lon = (min_lon + max_lon) / 2 if center is None else center[1]
+        initial_zoom = zoom or 6
+    else:
+        bounds = [[8.0, 68.0], [37.0, 97.0]]
+        c_lat, c_lon = (center[0], center[1]) if center else (22.0, 79.0)
+        initial_zoom = zoom or 5
 
     # Parse external GeoJSON layers
     parsed_layers = []
