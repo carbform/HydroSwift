@@ -15,9 +15,11 @@ def _catalog():
     rows = [
         dict(Source="NWDP", Title="Rainfall Karnataka 2022", Location="KSNDMC", Variable="Rainfall",
              Resolution="Daily", ID="r1", CoverageKnown=True, CoverageStart="2022-01-01",
-             CoverageEnd="2022-12-31", Provider="NWDP", Inferred=["Resolution"], MatchedOn="organization"),
+             CoverageEnd="2022-12-31", Provider="NWDP", Inferred=["Resolution"], MatchedOn="organization",
+             lat=12.97, lon=77.59),
         dict(Source="CWC", Title="Shimoga", Location="Krishna, Karnataka", Variable="Water level",
-             Resolution="Sub-daily", ID="c1", CoverageKnown=False, Provider="CWC", Inferred=[], MatchedOn="state"),
+             Resolution="Sub-daily", ID="c1", CoverageKnown=False, Provider="CWC", Inferred=[], MatchedOn="state",
+             lat=13.92, lon=75.56),
     ]
     df = pd.DataFrame(rows)
     for c in CATALOG_COLUMNS + ["_org_id", "_basin", "_rl_zero"]:
@@ -80,6 +82,8 @@ def test_find_review_get_use(tmp_path, monkeypatch):
 
     w.location.setText("Karnataka"); w.query.setText("rain"); w.start.setText("2022"); w.end.setText("2022")
     w.source_boxes["CWC-RSMS"].setChecked(False)
+    if "WRIS" in w.source_boxes:
+        w.source_boxes["WRIS"].setChecked(False)
     w.do_search(); _wait(app, w)
     assert seen["search"] == ("rain", "Karnataka", ["NWDP", "CWC"], ("2022", "2022"))
     assert w.table.rowCount() == 2
@@ -103,6 +107,10 @@ def test_find_review_get_use(tmp_path, monkeypatch):
     assert "2 saved" in w.run_summary.text()
     assert w.plot_btn.isEnabled() and w.merge_btn.isEnabled()
     assert any("Download finished" in m for m, _ in logs)
+
+    # Test that do_map_search works without AttributeError or crash
+    w.do_map_search(); _wait(app, w)
+    assert any("Created map" in m for m, _ in logs)
 
 
 def test_failed_search_is_reported_not_swallowed(tmp_path, monkeypatch):

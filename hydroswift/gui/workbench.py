@@ -72,6 +72,7 @@ class Workbench(QWidget):
         super().__init__(parent)
         self.output_dir = Path("output")
         self.results: Optional[pd.DataFrame] = None   # last search (full, provenance in attrs)
+        self.catalog = None                           # alias
         self.basket: Optional[pd.DataFrame] = None
         self.run: Optional[pd.DataFrame] = None       # last fetch
         self._shown: list = []                         # results index per table row
@@ -457,9 +458,10 @@ class Workbench(QWidget):
         self._start(job, lambda hmap: self._on_mapped(hmap, out), "Mapping")
 
     def do_map_search(self):
-        if not self._shown or self.catalog is None or self.catalog.empty:
+        df = getattr(self, "results", None)
+        if not self._shown or df is None or df.empty:
             return
-        cat = self.catalog.iloc[self._shown]
+        cat = df.iloc[self._shown]
         out = str(Path(self.out_edit.text()) / "search_map.html")
 
         def job(emit, cancel):
