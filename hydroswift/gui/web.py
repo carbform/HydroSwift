@@ -173,36 +173,69 @@ def main():
                             cross_boundary=True,
                         )
                         st.session_state["catalog"] = cat
-                        st.session_state["basket"] = cat.copy()
+                        # If more than 10 items, add first 10 for fast interactive exploration
+                        if len(cat) > 10:
+                            st.session_state["basket"] = cat.head(10).copy()
+                            st.info(f"Discovered {len(cat):,} items. Added first 10 to basket for fast exploration (customize in Catalog tab).")
+                        else:
+                            st.session_state["basket"] = cat.copy()
+                            st.success(f"Discovered {len(cat):,} catalog items.")
                         st.session_state["run"] = None
                         st.session_state["tidy"] = None
-                        st.success(f"Discovered {len(cat):,} catalog items.")
                     except Exception as e:
                         st.error(f"Discovery error: {e}")
 
         st.header("3 · Basket & Actions")
         basket = st.session_state.get("basket")
         basket_len = len(basket) if basket is not None else 0
-        st.caption(f"**Items in basket**: {basket_len:,}")
+        total_discovered = len(cat) if cat is not None else 0
+        st.caption(f"**Items in basket**: {basket_len:,} (of {total_discovered:,} discovered)")
+
+        # Quick size warning if basket is large
+        if basket_len > 25:
+            st.warning(f"⚠️ Basket has {basket_len} items. Downloading runs in parallel (4 workers) with a 50k-row safety cap per item.")
 
         export_format = st.selectbox("Export Format", ["csv", "parquet", "gpkg", "json"], index=0)
 
-        if st.button("Download Basket Data", disabled=(basket_len == 0), use_container_width=True):
-            with st.spinner(f"Fetching data for {basket_len} items..."):
-                try:
-                    period = (start_year, end_year) if start_year and end_year else None
-                    run = hs.fetch(
-                        basket,
-                        output_dir="output",
-                        period=period,
-                        format=export_format if export_format in ("csv", "json") else "csv",
-                    )
-                    st.session_state["run"] = run
-                    tidy = hs.load(run)
-                    st.session_state["tidy"] = tidy
-                    st.success(f"Fetched {len(run):,} files ({len(tidy):,} observation rows).")
-                except Exception as e:
-                    st.error(f"Download failed: {e}")
+        if st.button("Download Basket Data", disabled=(basket_len == 0), type="primary", use_container_width=True):
+            prog_bar = st.progress(0.0, text=f"Downloading {basket_len} items...")
+            status_text = st.empty()
+
+            import threading
+            cancel_ev = threading.Event()
+
+            completed = 0
+            def on_progress(evt):
+                nonlocal completed
+                if evt.get("event") == "item_done":
+                    completed += 1
+                    pct = min(1.0, max(0.0, completed / max(basket_len, 1)))
+                    t = evt.get("title") or evt.get("id") or "Station"
+                    s = evt.get("status") or "done"
+                    recs = evt.get("records")
+                    r_str = f" ({recs:,} rows)" if recs else ""
+                    prog_bar.progress(pct, text=f"[{completed}/{basket_len}] {t} → {s}{r_str}")
+                    status_text.caption(f"Downloaded {completed} of {basket_len} items ({s})")
+
+            try:
+                period = (start_year, end_year) if start_year and end_year else None
+                run = hs.fetch(
+                    basket,
+                    output_dir="output",
+                    period=period,
+                    format=export_format if export_format in ("csv", "json") else "csv",
+                    progress=on_progress,
+                    cancel=cancel_ev,
+                    workers=4,
+                    max_records=50000,
+                )
+                st.session_state["run"] = run
+                tidy = hs.load(run)
+                st.session_state["tidy"] = tidy
+                prog_bar.progress(1.0, text=f"Completed {len(run):,} downloads.")
+                st.success(f"Fetched {len(run):,} files ({len(tidy):,} observation rows).")
+            except Exception as e:
+                st.error(f"Download failed: {e}")
 
         if basket_len > 0:
             if st.button("Clear Basket", use_container_width=True):
@@ -305,8 +338,19 @@ def main():
             st.dataframe(display_df[cols_to_show], use_container_width=True, height=420)
 
             # Basket manipulation
-            bcol1, bcol2, bcol3 = st.columns([2, 2, 4])
-            if bcol1.button("Add Shown to Basket"):
+            st.markdown("**Basket Selection**")
+            bcol1, bcol2, bcol3, bcol4 = st.columns(4)
+            if bcol1.button("⚡ First 5 Stations", use_container_width=True):
+                st.session_state["basket"] = display_df.head(5).copy()
+                st.success("Basket set to first 5 items.")
+                st.rerun()
+
+            if bcol2.button("⚡ First 10 Stations", use_container_width=True):
+                st.session_state["basket"] = display_df.head(10).copy()
+                st.success("Basket set to first 10 items.")
+                st.rerun()
+
+            if bcol3.button(f"➕ Add Filtered ({len(display_df)})", use_container_width=True):
                 if st.session_state.get("basket") is None:
                     st.session_state["basket"] = display_df.copy()
                 else:
@@ -314,13 +358,12 @@ def main():
                 st.success(f"Basket updated: {len(st.session_state['basket'])} items.")
                 st.rerun()
 
-            if bcol2.button("Reset Basket to All Discovered"):
+            if bcol4.button(f"📦 Add All ({len(cat)}) Items", use_container_width=True):
                 st.session_state["basket"] = cat.copy()
-                st.success("Basket reset to all discovered items.")
+                st.success(f"Basket set to all {len(cat)} items.")
                 st.rerun()
 
-            # Export manifest / catalog
-            if bcol3.button("Save Discovered Catalog to JSON"):
+            if st.button("Save Discovered Catalog to JSON"):
                 out_p = Path("output/catalog.json")
                 out_p.parent.mkdir(parents=True, exist_ok=True)
                 hs.save_catalog(cat, out_p)

@@ -141,8 +141,9 @@ class NwdpClient:
         return None
 
     def fetch_records(self, resource_id: str, filters: dict = None, limit: int = 10000,
-                      progress=None, cancel=None) -> list[dict]:
-        """Fetch every DataStore record; outcome is left in ``self.last_fetch``.
+                      max_records: Optional[int] = 50000, progress=None, cancel=None) -> list[dict]:
+        """Fetch DataStore records up to ``max_records`` (default 50,000 for responsive downloads).
+        Outcome is left in ``self.last_fetch``. Pass ``max_records=None`` for full unbounded retrieval.
 
         ``progress(read, total)`` is called after each page; if the
         ``cancel`` event is set the loop stops and the result is marked incomplete.
@@ -163,7 +164,7 @@ class NwdpClient:
                 params = {"resource_id": resource_id, "limit": limit, "offset": offset}
                 if filters:
                     params["filters"] = json.dumps(filters)
-                r = self.session.get(self.DATASTORE_API, params=params, timeout=30)
+                r = self.session.get(self.DATASTORE_API, params=params, timeout=25)
                 if r.status_code != 200:
                     raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
                 data = r.json()
@@ -182,6 +183,9 @@ class NwdpClient:
                 if cancel is not None and cancel.is_set():
                     status["cancelled"] = True
                     raise RuntimeError("cancelled by user")
+                if max_records is not None and len(records) >= max_records:
+                    records = records[:max_records]
+                    break
                 if len(batch) < limit:
                     break
         except Exception as e:
@@ -192,6 +196,6 @@ class NwdpClient:
         rep = status["records_reported"]
         if status["ok"] and rep is not None and len(records) < rep:
             status["complete"] = False
-            status["error"] = f"truncated: read {len(records)} of {rep} records"
+            status["error"] = f"capped: read {len(records):,} of {rep:,} records (max_records={max_records:,})"
         self.last_fetch = status
         return records

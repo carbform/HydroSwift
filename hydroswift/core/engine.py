@@ -161,6 +161,7 @@ class FetchOptions:
     resume: bool = True            # reuse files recorded in an earlier manifest for the same request
     progress: Any = None           # callable(event: dict); never prints
     cancel: Any = None             # threading.Event-like with is_set()
+    max_records: Optional[int] = 50000  # protective cap on giant datastore tables (e.g. NWDP)
 
 
 def _slug(x) -> str:
@@ -302,7 +303,8 @@ class NwdpAdapter:
         try:
             def _page(read, total):
                 _emit(opts, "page", rec, read=read, total=total)
-            records = client.fetch_records(rec.id, progress=_page, cancel=opts.cancel)
+            records = client.fetch_records(rec.id, max_records=getattr(opts, "max_records", 50000),
+                                           progress=_page, cancel=opts.cancel)
             info = getattr(client, "last_fetch", None) or {}
             rec.complete = info.get("complete", True)
             if not info.get("ok", True) or not rec.complete:
@@ -751,31 +753,32 @@ def _find_prior(output_dir, rec_key, lo, hi):
 
 def fetch_catalog(table: pd.DataFrame, *, output_dir="output", period=None, start_date=None, end_date=None,
                   format="csv", overwrite=False, quiet=True, manifest=True, rc_discharge=True,
-                  resume=True, progress=None, cancel=None) -> pd.DataFrame:
+                  resume=True, progress=None, cancel=None, max_records: Optional[int] = 50000,
+                  workers: int = 1) -> pd.DataFrame:
     """Download every row of a catalog table; return one FetchRecord row per item.
 
     Never prints. Pass ``progress(event_dict)`` to follow the run and a
     ``threading.Event`` as ``cancel`` to stop it between pages/items.
+    Set ``workers > 1`` for concurrent parallel downloads across stations.
     """
     if period is not None:
         start_date, end_date = parse_period(period)
     opts = FetchOptions(str(output_dir), start_date, end_date, format, overwrite, quiet,
-                        rc_discharge, resume, progress, cancel)
+                        rc_discharge, resume, progress, cancel, max_records=max_records)
     os.makedirs(opts.output_dir, exist_ok=True)
-    records = []
     n = len(table)
-    for i, (_, row) in enumerate(table.iterrows(), 1):
+
+    def _fetch_one_item(item_tuple):
+        i, (_, row) = item_tuple
         src = row["Source"]
         base = FetchRecord(str(src), str(row.get("ID")), str(row.get("Title")),
                            req_start=start_date, req_end=end_date)
         if cancel is not None and cancel.is_set():
             base.status, base.error = "cancelled", "cancelled before start"
-            records.append(base)
-            continue
+            return base
         if src not in ADAPTERS:
             base.status, base.error = "error", f"no adapter for source {src!r}"
-            records.append(base)
-            continue
+            return base
         _emit(opts, "item_start", base, index=i, total=n)
         prior = None if (overwrite or not resume) else _find_prior(opts.output_dir, (str(src), str(row.get("ID"))), start_date, end_date)
         if prior:
@@ -787,7 +790,15 @@ def fetch_catalog(table: pd.DataFrame, *, output_dir="output", period=None, star
             rec = ADAPTERS[src]().fetch(row, opts)
             rec.req_start, rec.req_end = start_date, end_date
         _emit(opts, "item_done", rec, index=i, total=n, status=rec.status, records=rec.records)
-        records.append(rec)
+        return rec
+
+    if workers > 1 and n > 1:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(workers, n, 8)) as executor:
+            records = list(executor.map(_fetch_one_item, enumerate(table.iterrows(), 1)))
+    else:
+        records = [_fetch_one_item(tup) for tup in enumerate(table.iterrows(), 1)]
+
     out = pd.DataFrame([asdict(r) for r in records])
     out.attrs["swift_type"] = "fetch_results"
     if manifest:

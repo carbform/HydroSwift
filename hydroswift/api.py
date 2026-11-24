@@ -55,7 +55,8 @@ def cli_help():
 
 def fetch(table, *, output_dir="output", period=None, start_date=None, end_date=None,
           format="csv", overwrite=False, rc_discharge=True, resume=True,
-          progress=None, cancel=None, quiet=True):
+          progress=None, cancel=None, quiet=True, max_records: Optional[int] = 50000,
+          workers: int = 4):
     """Download every row of a catalog table returned by :func:`search`.
 
     Parameters
@@ -90,7 +91,8 @@ def fetch(table, *, output_dir="output", period=None, start_date=None, end_date=
         )
     result = fetch_catalog(table, output_dir=output_dir, period=period, start_date=start_date,
                            end_date=end_date, format=format, overwrite=overwrite, quiet=quiet,
-                           rc_discharge=rc_discharge, resume=resume, progress=progress, cancel=cancel)
+                           rc_discharge=rc_discharge, resume=resume, progress=progress, cancel=cancel,
+                           max_records=max_records, workers=workers)
     failed = result[result["status"] == "error"]
     if len(failed):
         warnings.warn(

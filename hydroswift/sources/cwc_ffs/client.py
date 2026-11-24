@@ -744,7 +744,7 @@ def _fetch_new_entry_timeseries(
 
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    delays = [5, 10, 20]
+    delays = [2, 5, 10]
 
     for attempt in range(retries):
 
@@ -754,7 +754,7 @@ def _fetch_new_entry_timeseries(
                 CWC_API,
                 params=params,
                 headers=headers,
-                timeout=120
+                timeout=30
             )
 
             if r.status_code == 200:
@@ -794,7 +794,7 @@ def _fetch_legacy_discharge(code, start_date=None, end_date=None, retries=3):
     start = start_date or "1950-01-01"
     end = end_date or "2100-01-01"
     headers = {"User-Agent": "Mozilla/5.0"}
-    delays = [5, 10, 20]
+    delays = [2, 5, 10]
     payload = {
         "stationCode": f"'{code}'",
         "startDate": start,
@@ -807,7 +807,7 @@ def _fetch_legacy_discharge(code, start_date=None, end_date=None, retries=3):
                 LEGACY_CWC_API,
                 data=json.dumps(payload),
                 headers={**headers, "Content-Type": "application/json"},
-                timeout=120,
+                timeout=30,
             )
             if r.status_code == 200:
                 data = r.json()
