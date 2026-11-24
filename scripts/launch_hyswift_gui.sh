@@ -31,10 +31,10 @@ echo ""
 echo "📥 Installing HydroSwift with GUI support..."
 pip install -e ".[gui]" --upgrade
 
-# Verify PyQt5
+# Verify Streamlit & Plotly
 echo ""
-echo "✓ Checking PyQt5..."
-python3 -c "from PyQt5.QtWidgets import QApplication; print('   ✓ PyQt5 available')"
+echo "✓ Checking Streamlit & Plotly..."
+python3 -c "import streamlit, plotly; print('   ✓ Streamlit & Plotly available')"
 
 # Check HydroSwift
 echo ""
@@ -49,12 +49,10 @@ echo "   ✓ output/ directory ready"
 
 # Launch GUI
 echo ""
-echo "🚀 Launching HydroSwift GUI..."
+echo "🚀 Launching HydroSwift Dashboard..."
 echo ""
-echo "If the GUI doesn't open automatically, you can:"
-echo "  • Run:  hyswift-gui"
-echo "  • Or:   python -m swift_app.gui"
+echo "If the browser doesn't open automatically, visit:"
+echo "  • URL:  http://localhost:8501"
 echo ""
 
-hyswift-gui &
-wait
+hyswift-gui

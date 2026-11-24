@@ -1,284 +1,69 @@
-# HydroSwift GUI - Quick Reference Card
+# HydroSwift Dashboard - Quick Reference Card
 
-## 🚀 Getting Started
+## 🚀 Quick Launch
 
-### Installation
+### Terminal
 ```bash
-# Standard installation with GUI
-pip install -e .[gui]
+# Recommended command:
+hyswift gui
 
-# Full installation (all features)
-pip install -e .[all]
-
-# Development installation
-pip install -r requirements-gui.txt
+# Or direct entry point:
+hyswift-gui
 ```
-
-### Launch
-```bash
-hyswift-gui                          # Command-line
-python -m swift_app.gui              # Module execution
-bash scripts/launch_hyswift_gui.sh   # Quick-start script
-```
+Launches automatically in your browser at `http://localhost:8501`.
 
 ---
 
-## 📊 Tab-by-Tab Guide
+## 🧭 Navigation & Modules
 
-### Tab 1: WRIS Data (📊)
-**Purpose**: Discover and download India Water Resources data
-
-- **Select Basin**: Godavari, Krishna, Narmada, etc.
-- **Select Variable**: Discharge, water level, rainfall, temperature, etc.
-- **Discover**: Find available stations
-- **Download**: Retrieve data with selected parameters
-
-**Outputs**: `output/wris/{basin}/{variable}/*.csv`
-
-### Tab 2: CWC Stations (💧)
-**Purpose**: Access Central Water Commission flood forecasting data & reservoirs
-
-- **Browse Stations**: List of monitoring stations
-- **Filter Basin**: Narrow down by region
-- **Select Stations**: Multi-select from list
-- **Download**: Retrieve water level data
-- **Refresh Metadata**: Update station information
-- **Reservoirs & RSMS**: Supports CWC Reservoir Storage Monitoring System (RSMS) live daily snapshots, weekly bulletin PDF extraction, and SWOT satellite WSE harmonization via CLI / Python API.
-
-**Outputs**:
-- River stations: `output/cwc/{basin}/stations/*.csv`
-- Reservoirs: `output/cwc/rsms_daily_snapshots.csv`, `output/cwc/cwc_bulletin_backfill.csv`
-- Harmonized DB: `output/reservoir_geodb/unified_reservoir_swot_gauge.gpkg`
-
-### Tab 3: Configuration (⚙️)
-**Purpose**: Set download parameters and options
-
-**Date Settings**:
-- Start Date: Beginning of analysis period
-- End Date: End of analysis period
-
-**Format & Output**:
-- Format: CSV / Excel / Parquet
-- Output Directory: Where to save files
-- Browse button: File dialog to select directory
-
-**Options**:
-- ☐ Overwrite existing files
-- Request Delay: 0-60 seconds between API calls
-- ☐ Merge downloaded files
-- ☐ Include metadata
-
-### Tab 4: Results (📈)
-**Purpose**: View, analyze, and visualize downloaded data
-
-- **Refresh Results**: Scan output directory
-- **Plot Selected Data**: Time-series visualization
-- **Export as GeoPackage**: Geospatial format
-- Files List: Browse downloaded CSV files
-- File Information: Details about selected file
+| Module / Button | Purpose |
+| :--- | :--- |
+| **Hydrology Data** | Spatial scoping, cross-boundary catalog discovery, multi-format downloading, auto-zooming Leaflet map, and interactive time-series plots. |
+| **Reservoir Status** | Dedicated CWC RSMS live bulletin, national reservoir storage KPIs, interactive Leaflet capacity map, and CSV export. |
+| **Help** | Top action popover displaying workflow guides and CLI shortcuts. |
+| **About** | Top action popover displaying author credits, official API endpoints, and disclaimer. |
+| **Dark Mode** | High-contrast dark theme toggle with instant stylesheet re-injection. |
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## 🗺️ Hydrology Data Workflow
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+O` | Open output directory |
-| `Ctrl+,` | Open settings |
-| `Ctrl+Q` | Exit application |
-| `F1` | Show API help |
+### 1. Boundary & Spatial Scope
+* **Hydrological (Basin)**: Select from 22 official CWC River Basins (e.g. Cauvery, Ganga, Godavari, Krishna). The system cross-discovers constituent administrative state datasets from NWDP.
+* **Administrative (State)**: Select from 36 Indian States & UTs. Automatically finds intersecting river basins.
+* **All / Custom**: Free text location keyword.
 
----
+### 2. Variable & Sources
+* **Variable Dropdown**: `All Variables`, `Water level`, `Discharge`, `Rainfall`, `Groundwater level`, `Water quality`, or `Custom...`.
+* **Sources**: Toggle CWC Flood Forecasting, India-WRIS OpenAPI, and NWDP Open Data.
 
-## 🎨 User Interface Elements
+### 3. Discovery Pop-Up Modal
+* Pops up automatically when **Search & Discover** completes.
+* Use shortcuts: `Select All`, `First 10 Stations`, or `View on Map`.
 
-### Status Bar (Bottom)
-- Left side: Current operation status
-- Right side: Progress percentage/message
-
-### Logger Widget (Lower Panel)
-- `[HH:MM:SS] Message` format
-- **Color Codes**:
-  - 🔵 Blue: Information
-  - 🟢 Green: Success
-  - 🟡 Orange: Warning
-  - 🔴 Red: Error
-
-### Buttons
-- 🔍 Discover Stations
-- ⬇️ Download Data
-- 🔄 Refresh
-- 📊 Plot
-- 💾 Export
-- Browse / Settings
+### 4. Top Download Action Bar
+* Located at the top of the main area.
+* Choose format: `csv`, `parquet`, `gpkg`, `json`.
+* Target folder with **Browse…** OS folder picker dialog.
+* Click **Download Selected ({count})**.
 
 ---
 
-## 📁 Output Directory Structure
+## 📊 Visualizer Plot Types (Tab: Visualize)
 
-```
-output/
-├── wris/
-│   ├── Godavari/
-│   │   ├── discharge/
-│   │   │   ├── 001-STATION_discharge.csv
-│   │   │   ├── 002-STATION_discharge.csv
-│   │   │   └── merged_discharge.csv
-│   │   └── water_level/
-│   │       └── ...
-│   ├── Krishna/
-│   │   └── ...
-│   └── ...
-│
-└── cwc/
-    ├── Krishna/
-    │   ├── stations/
-    │   │   ├── 040-STATION.csv
-    │   │   └── ...
-    │   └── waterlevel.gpkg
-    └── ...
-```
+| Plot Type | Description |
+| :--- | :--- |
+| **Stage & Discharge Hydrograph** | Dual-axis synchronized water level (m) and discharge (m³/s) with Warning & Danger levels. |
+| **Stage-Discharge Rating Curve (H-Q)** | Power-law rating curve fit ($Q = a(h - h_0)^b$) on synchronized stage-discharge observations. |
+| **Rainfall Hyetograph & Mass Curve** | Inverted rainfall bar chart paired with cumulative precipitation mass curve. |
+| **Flow Duration Curve (FDC)** | Exceedance probability curve with marked $Q_{10}$, $Q_{50}$, and $Q_{90}$ flow metrics. |
+| **Groundwater Level Hydrograph** | Groundwater level time series with mean reference line, optional inverted Y-axis toggle (mbgl depth convention), and Min/Mean/Max/Fluctuation KPIs. |
 
 ---
 
-## ⚙️ Settings (File → Settings)
+## 🌊 Reservoir Status Module (CWC RSMS)
 
-### General Tab
-- **Output Directory**: Default save location
-- **Theme**: Light or Dark
-- **Start maximized**: Window size on launch
-- **Show tips**: Display help on startup
-
-### Download Tab
-- **Default Format**: CSV / Excel / Parquet
-- **Request Delay**: 0-60 seconds (1 recommended)
-- **Connection Timeout**: 5-300 seconds
-- **Auto-merge**: Default merge behavior
-- **Confirm Overwrite**: Ask before replacing files
-
-### API Tab
-- **Default Basin**: WRIS basin preset
-- **Default Variable**: WRIS variable preset
-- **Date Range**: Default days to retrieve (365 = 1 year)
-- **Auto Refresh CWC**: Update metadata on startup
-
----
-
-## 🔧 Common Tasks
-
-### Download Discharge Data for Godavari (2023)
-1. **WRIS Tab** → Basin: Godavari → Variable: Discharge → Discover
-2. **Config Tab** → Start: 2023-01-01 → End: 2024-01-01 → Merge: ON
-3. **WRIS Tab** → Download Selected Stations
-4. **Results Tab** → Refresh Results → Plot to view
-
-### Compare Multiple Basins
-1. Repeat WRIS discovery for Godavari, Krishna, Narmada
-2. Download each with merge enabled
-3. Results tab shows all files
-4. Plot any file for visualization
-
-### Export for GIS Analysis
-1. Download data (any source)
-2. Go to Results tab
-3. Click "Export as GeoPackage"
-4. Opens `output/*/waterlevel.gpkg` (geospatial format)
-5. Use in QGIS or GeoPandas
-
-### Adjust Download Speed
-1. File → Settings → Download Tab
-2. Increase Request Delay (5-10 seconds for slower networks)
-3. Adjust Connection Timeout if experiencing timeouts
-4. Click OK
-
----
-
-## 🐛 Quick Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| GUI won't start | Check PyQt5: `pip install --upgrade PyQt5` |
-| Slow discovery | Use limit field, increase request delay |
-| Download fails | Check internet, increase timeout in settings |
-| Plot shows nothing | Ensure CSV has 'time' column and value data |
-| Permission error | Check output folder permissions |
-| Out of memory | Use parquet format, reduce date range |
-
----
-
-## 📊 Data Formats
-
-### CSV (Default) ✅ Recommended
-- Compatible with Excel, Python, R
-- Human-readable
-- Easy to import
-- No special tools required
-
-### Excel
-- Requires: `pip install openpyxl`
-- Same as CSV but in .xlsx format
-- Slower for large files
-
-### Parquet
-- Binary format
-- Most efficient compression
-- Best for big data
-- Requires: `pip install pyarrow`
-
----
-
-## 💡 Tips & Tricks
-
-1. **Merge your downloads** for easier analysis → single file per variable
-2. **Use CSV format** for fastest I/O and broad compatibility
-3. **Set request delay** to 2-5 seconds to be respectful to API servers
-4. **Create organized output dirs**: `output_2023/`, `output_2024/`, etc.
-5. **Export to GeoPackage** for spatial analysis in QGIS
-6. **Check logs** if errors occur - detailed information provided
-7. **Save settings** once and they persist across sessions
-8. **Use Configuration tab** before downloading multiple datasets
-
----
-
-## 🔗 Related Resources
-
-| Resource | Link |
-|----------|------|
-| Full Documentation | `docs/GUI_GUIDE.md` |
-| Module README | `swift_app/gui/README.md` |
-| Python API Guide | `docs/PYTHON_API_GUIDE.md` |
-| CLI Usage | `docs/CLI_USAGE_GUIDE.md` |
-| GitHub Repository | https://github.com/carbform/HydroSwift |
-| ReadTheDocs | https://hydroswift.readthedocs.io/ |
-
----
-
-## 📞 Need Help?
-
-1. **First**: Check `docs/GUI_GUIDE.md` FAQ section
-2. **Then**: Check GitHub Issues: https://github.com/carbform/HydroSwift/issues
-3. **Report**: Open new issue with Python version, error message, and steps
-
----
-
-## 🎯 Quick Reference - File Menu
-
-```
-File
-├── Open Output Directory    (Ctrl+O)  → File manager
-├── Settings                 (Ctrl+,)  → Preferences dialog
-└── Exit                     (Ctrl+Q)  → Close application
-
-Edit
-└── Clear Log                          → Remove all log messages
-
-Help
-├── About HydroSwift                   → Version & credits
-└── API Help                 (F1)      → Print Python API help
-```
-
----
-
-**Version**: HydroSwift GUI 1.0.0  
-**Last Updated**: March 2026  
-**License**: MIT
+* **Fetch Live Status**: Retrieves live levels, FRL, DSL, and storage from CWC RSMS portal and GeoServer WFS.
+* **KPI Metrics**: Monitored Reservoirs, Total Live Capacity (BCM), Current Storage Monitored (BCM and %), and Critical Reservoirs (<40%).
+* **National Reservoir Map**: Interactive pins with storage percentage, capacity, and current water levels.
+* **Export CSV**: Download complete national reservoir table with one click.

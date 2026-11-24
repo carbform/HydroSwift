@@ -1,78 +1,136 @@
 # Python API Guide
 
-HydroSwift has one workflow: **Find -> Review -> Get -> Use**.
+HydroSwift provides a clean, unified Python API following the four-stage workflow: **Find $\rightarrow$ Review $\rightarrow$ Get $\rightarrow$ Use**.
 
 ```python
 import hydroswift as hs
 ```
 
+---
+
 ## 1. Find: `hs.search`
 
-```python
-cat = hs.search(query=None, location=None, sources=None, *, period=None, ids=None, basin=None, state=None)
-```
-
-| Argument | Meaning |
-|---|---|
-| `query` | variable or keyword ("rainfall", "discharge", "ground water") |
-| `location` | case-insensitive **substring** of the fields a source has: NWDP organization; CWC basin, state, district, river. The matching field is in `MatchedOn`. |
-| `sources` | subset of `["NWDP", "CWC", "CWC-RSMS"]` |
-| `period` | `("2020", "2022")`, `("2020-03-01", None)` or `"2020:2022"`. Rows with known coverage outside it are dropped (counted); rows with unknown coverage are kept and flagged `CoverageKnown=False`. |
-| `ids` | exact catalog IDs |
-| `basin`, `state` | exact (equality) filters; CWC only. NWDP is skipped with an explanation rather than ignoring the filter. |
-
-The catalog columns are `Source, Title, Location, Variable, Resolution, ID, lat, lon, Unit, CoverageStart, CoverageEnd, CoverageKnown, Provider, Endpoint, MatchedOn, Inferred`.
-`Inferred` lists fields the source did not state (e.g. `Variable,Resolution` parsed from an NWDP title).
-
-## 2. Review
+Discover observations across CWC, India-WRIS, and NWDP:
 
 ```python
-cat.attrs["source_status"]   # per source: ok, complete, rows, error, note, endpoint, dropped{reason: count}
-cat.attrs["partial"]         # True if any source failed or its listing was truncated
-hs.estimate(cat)             # adds EstRecords / EstNote: exact server count for NWDP, None (unknown) for CWC
-hs.save_catalog(cat, "cat.json"); cat = hs.load_catalog("cat.json")   # keeps provenance
+cat = hs.search(
+    query=None,
+    location=None,
+    sources=None,
+    *,
+    period=None,
+    ids=None,
+    basin=None,
+    state=None,
+    cross_boundary=True,
+)
 ```
 
-Filter with ordinary pandas (`cat[cat.Source == "CWC"]`). Pass the filtered table to `fetch`; provenance in `attrs` may be lost by some pandas operations, in which case the manifest says "search provenance unavailable".
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `query` | `str` | Variable or physical parameter (e.g. `"rainfall"`, `"discharge"`, `"water level"`, `"groundwater level"`). |
+| `location` | `str` | Free-form substring matched against station titles, rivers, and locations. |
+| `sources` | `list[str]` | Subset of `["CWC", "WRIS", "NWDP"]`. Defaults to all. |
+| `period` | `tuple` or `str` | Temporal bounds: `("2020", "2024")`, `("2021-01-01", "2023-12-31")`, or `"2020:2024"`. |
+| `basin` | `str` | Exact official CWC River Basin name (e.g. `"Cauvery"`, `"Ganga"`, `"Godavari"`). |
+| `state` | `str` | Exact Indian State or Union Territory name (e.g. `"Karnataka"`, `"Odisha"`). |
+| `cross_boundary` | `bool` | When `True` (default), querying a river basin automatically cross-discovers constituent state open datasets (e.g., NWDP). |
+| `ids` | `list[str]` | List of exact catalog station IDs to retrieve. |
+
+**Returned Catalog Structure**:
+A pandas DataFrame containing:
+`Source, Title, Location, Variable, Resolution, ID, lat, lon, Unit, CoverageStart, CoverageEnd, CoverageKnown, Provider, Endpoint, MatchedOn, Inferred`.
+
+---
+
+## 2. Review: Provenance & Estimation
+
+Inspect search results and verify server-side record estimates:
+
+```python
+# Check per-source execution provenance
+cat.attrs["source_status"]   # per-source: ok, complete, rows, error, note, endpoint
+cat.attrs["partial"]         # True if any source encountered warnings or partial returns
+
+# Estimate exact record counts (available on supporting sources like NWDP)
+estimated = hs.estimate(cat.head(10))
+
+# Save & reload discovered catalogs with full provenance
+hs.save_catalog(cat, "output/catalog.json")
+loaded_cat = hs.load_catalog("output/catalog.json")
+```
+
+---
 
 ## 3. Get: `hs.fetch`
 
-```python
-run = hs.fetch(cat, output_dir="output", period=("2020", "2022"), format="csv",
-               overwrite=False, rc_discharge=True, resume=True, progress=None, cancel=None)
-```
-
-Returns one row per item: `status` (`saved`, `skipped`, `empty`, `error`, `cancelled`), `path`, `records`, actual `start`/`end`, `error`, `method_note`. The manifest path is in `run.attrs["manifest"]`.
-
-* NWDP has no server-side date filter, so the range is applied after download (`filtered_client_side=True`). Resources whose name states a period outside the range are not downloaded.
-* CWC discharge is a rating-curve estimate from stage; `rc_discharge=False` fetches stage only.
-* `resume=True` reuses a file only if an earlier manifest recorded the same ID **and** the same requested range.
-* `progress(event)` receives dicts with `event` in `item_start`, `page`, `item_done`; `cancel` is a `threading.Event`. The engine never prints.
-
-## 4. Use
+Download observations from the catalog into local storage:
 
 ```python
-data = hs.load(run)          # or a manifest path, or an output directory
+run = hs.fetch(
+    cat,
+    output_dir="output",
+    period=("2020", "2024"),
+    format="csv",             # "csv", "parquet", "gpkg", "json"
+    overwrite=False,
+    rc_discharge=True,        # include CWC rating-curve discharge estimates
+    workers=4,
+    progress=None,            # callback function receiving item_start, page, item_done
+    cancel=None,              # threading.Event for non-blocking cancellation
+)
 ```
 
-Columns: `time, value, variable, unit, station_id, station_name, source, lat, lon, method, flag, file`.
-Variables: `rainfall, water_level, discharge, groundwater_level, reservoir_level, reservoir_storage, temperature, humidity, wind_speed, solar_radiation, atm_pressure, evaporation` (`hydroswift.tidy.VARIABLES`).
-`method` is `observed` unless derived (e.g. `rc_guardian_2024`); `flag` carries caveats (unit not stated, groundwater depth-vs-elevation convention). Files that cannot be mapped are listed in `data.attrs["unmapped"]` with a reason.
+**Returned Run Summary**:
+A DataFrame with one record per downloaded station: `status` (`saved`, `skipped`, `empty`, `error`), `path`, `records`, actual `start`/`end`, and provenance links to `manifest.json`.
+
+---
+
+## 4. Use: `hs.load`, `hs.merge`, `hs.plot`
+
+Load downloaded data into a standardized, tidy structure:
 
 ```python
-hs.merge(run, "output/all.parquet")    # .csv | .parquet | .gpkg (needs lat/lon)
-hs.plot(run, "output/plots", variable="discharge")
+# 1. Load into unified tidy DataFrame
+tidy = hs.load(run)  # or hs.load("output") / hs.load("output/manifest.json")
+print(tidy[["time", "station_name", "variable", "value", "unit"]].head())
+
+# 2. Merge all stations into a single analytics file
+hs.merge(run, "output/unified_observations.parquet")  # supports .parquet, .csv, .gpkg
+
+# 3. Generate publication-quality summary plots
+hs.plot(run, output_dir="output/plots")
 ```
 
-## Reservoirs (CWC RSMS)
+**Tidy DataFrame Schema**:
+* `time`: Standardized UTC/IST datetime timestamp.
+* `value`: Numerical observation measurement.
+* `variable`: Standardized parameter name (`water_level`, `discharge`, `rainfall`, `groundwater_level`, `reservoir_level`, `reservoir_storage`, etc.).
+* `unit`: Normalized physical unit (`m`, `m3/s`, `mm`, `BCM`, `degC`).
+* `station_id`, `station_name`: Unique station identifiers.
+* `source`: Data source provider (`CWC`, `WRIS`, `NWDP`).
+* `lat`, `lon`: Coordinates for geospatial mapping.
+* `method`: `observed` or `rc_guardian_2024` (for stage-derived discharge).
+* `flag`: Quality flags (e.g. groundwater depth vs elevation convention).
+
+---
+
+## 5. CWC RSMS National Reservoirs API
+
+Query real-time storage status for ~180 major Indian reservoirs:
 
 ```python
-hs.rsms.daily(output_path=...)        # latest-day storage snapshot
-hs.rsms.bulletins(from_date=..., to_date=...)
-hs.rsms.backfill(start_date="2025-05-15", output_csv=...)
-hs.rsms.build_database(reservoir_shp=..., swot_observations=..., gauge_source=...)   # = hs.swot_reservoir_merge
+# Daily snapshot bulletin from CWC RSMS portal
+res_df = hs.rsms.daily(output_path="output/cwc_rsms/daily_snapshot.csv")
+print(res_df[["reservoir_name", "storage_bcm", "live_cap_bcm", "storage_pct"]].head())
+
+# Backfill historical bulletins
+hs.rsms.backfill(start_date="2025-05-15", end_date="2025-06-01", output_csv="output/bulletins.csv")
+
+# Harmonize SWOT satellite elevations with in-situ reservoir storage
+hs.swot_reservoir_merge(
+    reservoir_shp="reservoirs.shp",
+    swot_observations="swot_obs.sqlite",
+    gauge_source="gauge_cache/",
+    output_gpkg="output/unified_reservoir_swot_gauge.gpkg",
+)
 ```
-
-## Removed names
-
-Accessing a removed name (`hs.wris`, `hs.cwc`, `hs.nwdp`, `get_wris_data`, `get_cwc_data`, `merge_only`, `plot_only`, `swot_merge`, ...) raises an error naming its replacement.

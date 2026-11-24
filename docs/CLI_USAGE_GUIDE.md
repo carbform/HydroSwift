@@ -1,35 +1,102 @@
-# CLI Usage Guide
+# HydroSwift CLI Usage Guide
+
+HydroSwift provides a fast, robust command-line interface (`hyswift`) that mirrors the same **Find $\rightarrow$ Review $\rightarrow$ Get $\rightarrow$ Use** workflow available in Python and the Web Studio.
+
+---
+
+## Command Overview
 
 ```bash
-hyswift search rainfall --where Karnataka --period 2020:2022 --save cat.json
-hyswift get --from cat.json --rows 0,2 --period 2020:2022 --out output
+# Guided interactive prompt mode
+hyswift
+
+# Launch modern Web Studio
+hyswift gui
+hyswift-gui
+
+# Search catalogs across CWC, WRIS, and NWDP
+hyswift search rainfall --where Karnataka --period 2020:2024 --save cat.json
+hyswift search discharge --basin Cauvery --sources CWC --save cauvery.json
+
+# Download data from saved catalog
+hyswift get --from cat.json --rows 0:5 --out output
+
+# Tidy summary and unified merge
 hyswift show output
-hyswift merge output all.parquet
+hyswift merge output output/merged.parquet
+
+# Generate summary hydrograph plots
 hyswift plot output output/plots
+
+# Real-time CWC Reservoir Storage bulletin
 hyswift rsms daily
-hyswift                      # guided prompts
 ```
 
-## `search`
-`hyswift search [query] [--where TEXT] [--basin NAME] [--state NAME] [--ids A,B] [--source NWDP|CWC|CWC-RSMS ...] [--period P] [--estimate] [--save FILE] [--limit N]`
+---
 
-Prints a per-source status block (ok / FAILED / PARTIAL, rows dropped and why, notes) and then the table.
-`--where` is a substring; `--basin`/`--state`/`--ids` are exact. `--save` keeps the catalog together with its provenance.
-Exit code 1 if the result is empty because a source failed.
+## 1. `search`
+Search across observational networks and open data portals:
+```bash
+hyswift search [query] [--where TEXT] [--basin NAME] [--state NAME] [--ids ID1,ID2] [--sources CWC WRIS NWDP] [--period YYYY:YYYY] [--estimate] [--save FILE] [--limit N]
+```
 
-## `get`
-`hyswift get --from FILE [--rows 0,2-5] [--period P] [--out DIR] [--format csv|xlsx|json] [--overwrite] [--no-rc-discharge]`
+* `query`: Variable keyword (e.g. `rainfall`, `discharge`, `water level`, `groundwater`).
+* `--where TEXT`: Free-form location keyword matched against station names and locations.
+* `--basin NAME`: Exact official CWC River Basin name (e.g. `Cauvery`, `Ganga`, `Godavari`, `Krishna`). Automatically cross-discovers constituent state open datasets.
+* `--state NAME`: Exact Indian State or Union Territory name.
+* `--sources`: One or more data sources (`CWC`, `WRIS`, `NWDP`).
+* `--period`: Temporal span as `START:END` (e.g. `2020:2024` or `2021-01-01:2023-12-31`).
+* `--estimate`: Queries exact record count estimates from supporting providers (NWDP).
+* `--save FILE`: Saves the discovered catalog along with full search provenance into JSON.
 
-Rows are numbered from 0 as printed by `search`. Prints progress per item and the manifest path; exit code 1 if any item failed.
+---
 
-## `show`, `merge`, `plot`
-`show PATH` summarises the tidy data (source, variable, unit, method, rows, stations, span) and lists unmapped files.
-`merge PATH OUTPUT` writes `.csv`, `.parquet` or `.gpkg`. `plot PATH [DIR] [--variable V]` writes one PNG per station and variable.
-`PATH` is an output directory (newest manifest) or a `manifest*.json`.
+## 2. `get`
+Download selected catalog items to disk:
+```bash
+hyswift get --from FILE [--rows SPEC] [--period P] [--out DIR] [--format csv|parquet|gpkg|json] [--overwrite]
+```
 
-## `rsms`
-`rsms daily [--out CSV]`, `rsms backfill [--start D] [--end D] [--out CSV] [--bulletin-dir DIR]`,
-`rsms build --reservoir-shp P --swot-db P --gauge-cache P [--out-dir DIR]`.
+* `--from FILE`: Path to a JSON catalog saved by `hyswift search`.
+* `--rows SPEC`: Indices to download, e.g. `0,1,2` or range `0:10`.
+* `--out DIR`: Output folder (default: `output`).
+* `--format`: File format for downloads (`csv`, `parquet`, `gpkg`, `json`).
+* Every fetch writes a `manifest.json` recording query parameters, per-item status, record counts, and timestamps.
 
-## Removed
-The old flat flags (`-b`, `-q`, `-rf`, `--cwc-basin`, `--merge`, `--plot-only`, `--nwdp-*`, `--rsms-daily`, ...) and the old wizard are gone.
+---
+
+## 3. `show`, `merge`, `plot`
+Inspect, harmonize, and visualize downloaded observations:
+
+* **`hyswift show PATH`**:
+  Prints a clean tabular summary of downloaded tidy data (variables, units, station counts, record counts, and date spans).
+* **`hyswift merge PATH OUTPUT`**:
+  Harmonizes downloaded station files into one unified tidy table (`.parquet`, `.csv`, or `.gpkg`).
+* **`hyswift plot PATH [DIR] [--variable V]`**:
+  Generates publication-quality hydrograph plots for each station and variable into the target plot folder.
+
+`PATH` can be an output folder (automatically picks the latest manifest) or a specific `manifest.json`.
+
+---
+
+## 4. `gui`
+Launch the modern Streamlit web dashboard:
+```bash
+hyswift gui
+```
+Opens the browser studio at `http://localhost:8501`.
+
+---
+
+## 5. `rsms`
+Central Water Commission (CWC) Reservoir Storage Monitoring System tools:
+```bash
+# Fetch latest daily reservoir bulletin for ~180 national reservoirs
+hyswift rsms daily [--out CSV]
+
+# Backfill historical bulletins
+hyswift rsms backfill [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--out CSV]
+
+# Build harmonized reservoir geodatabase (SWOT satellite + in-situ gauge)
+hyswift rsms build --reservoir-shp PATH --swot-db PATH --gauge-cache PATH [--out-dir DIR]
+```

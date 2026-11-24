@@ -90,7 +90,6 @@ def build_parser() -> argparse.ArgumentParser:
     bd.add_argument("--out-dir", default="output/reservoir_geodb")
 
     ui = sub.add_parser("gui", help="Launch the modern HydroSwift graphical interface")
-    ui.add_argument("--qt", action="store_true", help="Launch legacy desktop Qt GUI instead of modern web UI")
 
     sub.add_parser("cite", help="Show citation")
     sub.add_parser("coffee", help="Take a coffee break")
@@ -251,11 +250,8 @@ def run(args) -> int:
         return 0
 
     if cmd == "gui":
-        from .gui.app import run_gui, run_web
-        if getattr(args, "qt", False):
-            run_gui()
-        else:
-            run_web()
+        from .gui.app import run_web
+        run_web()
         return 0
 
     if cmd == "cite":
