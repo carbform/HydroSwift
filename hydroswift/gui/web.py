@@ -187,8 +187,9 @@ def main():
 
         st.header("3 · Basket & Actions")
         basket = st.session_state.get("basket")
+        cat_current = st.session_state.get("catalog")
         basket_len = len(basket) if basket is not None else 0
-        total_discovered = len(cat) if cat is not None else 0
+        total_discovered = len(cat_current) if cat_current is not None else 0
         st.caption(f"**Items in basket**: {basket_len:,} (of {total_discovered:,} discovered)")
 
         # Quick size warning if basket is large
