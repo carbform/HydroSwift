@@ -33,6 +33,18 @@ from .outputs import (
     map_data,
     HydroMap,
 )
+from .boundaries import (
+    INDIAN_BASINS,
+    INDIAN_STATES,
+    STANDARD_VARIABLES,
+    canonical_basin,
+    get_basin_bounds,
+    get_basins_for_state,
+    get_states_for_basin,
+    load_basin_geojson,
+    load_india_boundary_geojson,
+    load_aquifers_geojson,
+)
 
 __all__ = [
     "CATALOG_COLUMNS",
@@ -62,4 +74,14 @@ __all__ = [
     "create_map",
     "map_data",
     "HydroMap",
+    "INDIAN_BASINS",
+    "INDIAN_STATES",
+    "STANDARD_VARIABLES",
+    "canonical_basin",
+    "get_basin_bounds",
+    "get_basins_for_state",
+    "get_states_for_basin",
+    "load_basin_geojson",
+    "load_india_boundary_geojson",
+    "load_aquifers_geojson",
 ]
