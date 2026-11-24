@@ -29,12 +29,35 @@ DARK = dict(
 )
 CONTROL_H = "2.65rem"
 
-CREDITS = (
-    '<div class="credits"><b>HydroSwift</b> &nbsp;·&nbsp; '
-    '<a href="https://carbform.github.io" target="_blank" rel="noopener">carbform.github.io</a> &nbsp;·&nbsp; '
-    '<a href="https://github.com/carbform/HydroSwift" target="_blank" rel="noopener">GitHub</a> &nbsp;·&nbsp; '
-    'CWC & India-WRIS Open Data</div>'
-)
+
+def get_credits_html(dark: bool = False) -> str:
+    """Rich publication credits footer with official API links, authors, and disclaimer."""
+    c = DARK if dark else LIGHT
+    return (
+        f'<div class="credits">'
+        f'<b>HydroSwift</b> &nbsp;·&nbsp; '
+        f'<a href="https://github.com/carbform/HydroSwift" target="_blank" rel="noopener">GitHub Repository</a> &nbsp;·&nbsp; '
+        f'Developed by <a href="https://github.com/carbform" target="_blank" rel="noopener">carbform</a> '
+        f'(<a href="https://carbform.github.io" target="_blank" rel="noopener">website</a>) &nbsp;&amp;&nbsp; '
+        f'<a href="https://github.com/Bharatkreddy" target="_blank" rel="noopener">Bharatkreddy</a>'
+        f'<div style="margin-top: 0.5rem; font-size: 0.76rem; letter-spacing: 0.04em;">'
+        f'Official APIs: '
+        f'<a href="https://ffs.india-water.gov.in/" target="_blank" rel="noopener">CWC Flood Forecasting (FFS)</a> &nbsp;·&nbsp; '
+        f'<a href="http://waris.cwc.gov.in/" target="_blank" rel="noopener">CWC RSMS</a> &nbsp;·&nbsp; '
+        f'<a href="https://indiawris.gov.in/" target="_blank" rel="noopener">India-WRIS OpenAPI 3.0</a> &nbsp;·&nbsp; '
+        f'<a href="https://data.gov.in/" target="_blank" rel="noopener">National Water Data Portal (NWDP)</a>'
+        f'</div>'
+        f'<div style="margin-top: 0.65rem; font-size: 0.72rem; color: {c["muted"]}; max-width: 960px; margin-left: auto; margin-right: auto; line-height: 1.45;">'
+        f'<b>Disclaimer:</b> HydroSwift is an independent, open-source scientific software suite for hydrological data aggregation and visualization. '
+        f'It is not affiliated with, endorsed by, or an official product of the Ministry of Jal Shakti, Central Water Commission (CWC), or National Informatics Centre (NIC). '
+        f'Hydrological data accessed via public endpoints is provided &ldquo;as is&rdquo; for research and monitoring purposes. '
+        f'Please consult official government portals for statutory advisories and flood warnings.'
+        f'</div>'
+        f'</div>'
+    )
+
+
+CREDITS = get_credits_html(False)
 
 
 @cache

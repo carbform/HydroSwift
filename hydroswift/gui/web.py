@@ -61,7 +61,7 @@ from hydroswift.core.boundaries import (
     load_india_boundary_geojson,
 )
 from hydroswift.core.mapping import SOURCE_COLORS, create_map
-from hydroswift.gui.app_style import CREDITS, sidebar_brand, stylesheet
+from hydroswift.gui.app_style import CREDITS, get_credits_html, sidebar_brand, stylesheet
 from hydroswift.gui.desktop import choose_folder
 
 
@@ -185,8 +185,8 @@ def main():
     if "dark" not in st.session_state:
         st.session_state["dark"] = False
 
-    # Top Header Bar: Brand + View Switcher + Dark Mode Toggle
-    head_col, nav_col, dark_col = st.columns([4, 6, 2])
+    # Top Header Bar: Brand + View Switcher + Help + About + Dark Mode Toggle
+    head_col, nav_col, help_col, about_col, dark_col = st.columns([3.8, 3.8, 1.1, 1.1, 1.4])
     with head_col:
         st.markdown(
             '<div style="font-size: 1.55rem; font-weight: 700; letter-spacing: -0.02em; padding-top: 0.15rem;">'
@@ -212,6 +212,39 @@ def main():
         )
         is_rsms = (active_view_choice == "Reservoir Status")
 
+    with help_col:
+        with st.popover("Help", use_container_width=True):
+            st.markdown("### Quick Guide & Help")
+            st.markdown(
+                "1. **Boundary & Scope**: Choose **River Basin** (Hydrological) or **State** (Administrative) in the sidebar. Queries automatically cross-discover constituent observations.\n"
+                "2. **Physical Variable**: Filter by Water Level, Discharge, Rainfall, Groundwater, or all parameters.\n"
+                "3. **Search & Discover**: Queries live telemetry and archive records across CWC, WRIS, and NWDP.\n"
+                "4. **Download**: Pick your local folder and export selected stations in CSV, Parquet, GeoPackage, or GeoJSON.\n"
+                "5. **Visualize**: Analyze Stage & Discharge Hydrographs, H-Q Rating Curves, Hyetographs, Flow Duration Curves (FDC), and Groundwater Depth Hydrographs.\n"
+                "6. **Reservoir Status**: Switch to the dedicated top tab for live storage monitoring across ~180 major national reservoirs."
+            )
+            st.caption("CLI command: `hyswift --help` · Documentation: [GitHub](https://github.com/carbform/HydroSwift)")
+
+    with about_col:
+        with st.popover("About", use_container_width=True):
+            st.markdown("### About HydroSwift")
+            st.markdown(
+                "**HydroSwift** is an open-source hydrological data engine and visualization studio for Indian water resources.\n\n"
+                "**Authors & Credits**:\n"
+                "- **carbform** ([carbform.github.io](https://carbform.github.io) · [GitHub Profile](https://github.com/carbform))\n"
+                "- **Bharatkreddy** ([GitHub Profile](https://github.com/Bharatkreddy))\n"
+                "- **Source Code**: [carbform/HydroSwift on GitHub](https://github.com/carbform/HydroSwift)\n\n"
+                "**Official Data Sources & APIs**:\n"
+                "- [CWC Flood Forecasting System (FFS)](https://ffs.india-water.gov.in/)\n"
+                "- [CWC Reservoir Storage Monitoring System (RSMS)](http://waris.cwc.gov.in/)\n"
+                "- [India-WRIS OpenAPI 3.0](https://indiawris.gov.in/)\n"
+                "- [National Water Data Portal (NWDP / data.gov.in)](https://data.gov.in/)\n\n"
+                "**Disclaimer**:\n"
+                "HydroSwift is an independent scientific research software application. It is not affiliated with, endorsed by, "
+                "or an official product of the Ministry of Jal Shakti, Central Water Commission (CWC), or National Informatics Centre (NIC). "
+                "Data retrieved via public endpoints is provided 'as is'. Always refer to official government bulletins for statutory flood warnings."
+            )
+
     with dark_col:
         dark = st.toggle("Dark mode", key="dark")
 
@@ -231,7 +264,7 @@ def main():
                 st.rerun()
 
         render_rsms_view(dark)
-        st.markdown(CREDITS, unsafe_allow_html=True)
+        st.markdown(get_credits_html(dark), unsafe_allow_html=True)
         return
 
     # -------------------------------------------------------------------------
@@ -648,7 +681,13 @@ def main():
             st_pick = pcol1.selectbox("Select Station", stations)
             plot_type = pcol2.selectbox(
                 "Plot Type",
-                ["Stage & Discharge Hydrograph", "Stage-Discharge Rating Curve (H-Q)", "Rainfall Hyetograph", "Flow Duration Curve (FDC)"],
+                [
+                    "Stage & Discharge Hydrograph",
+                    "Stage-Discharge Rating Curve (H-Q)",
+                    "Rainfall Hyetograph",
+                    "Flow Duration Curve (FDC)",
+                    "Groundwater Level Hydrograph",
+                ],
             )
 
             st_data = tidy[tidy["station_name"] == st_pick] if st_pick in tidy["station_name"].values else tidy[tidy["station_id"] == st_pick]
@@ -771,11 +810,68 @@ def main():
                         )
                         st.plotly_chart(fig, use_container_width=True)
 
+                elif plot_type == "Groundwater Level Hydrograph":
+                    gw = st_data[st_data["variable"].str.lower().str.contains("ground|gw|well", na=False)].dropna(subset=["value"])
+                    if gw.empty:
+                        gw = st_data[st_data["variable"].str.lower().str.contains("water|stage|level|depth", na=False)].dropna(subset=["value"])
+                    if gw.empty and not st_data.empty:
+                        gw = st_data.dropna(subset=["value"])
+
+                    if gw.empty:
+                        st.warning("No groundwater level observations found for this station.")
+                    else:
+                        unit = str(gw["unit"].dropna().iloc[0]) if "unit" in gw.columns and not gw["unit"].dropna().empty else "m"
+                        gw = gw.sort_values("time")
+
+                        inv_y = st.checkbox("Invert Y-axis (Depth below ground level mbgl convention)", value=False)
+
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=gw["time"],
+                            y=gw["value"],
+                            mode="lines+markers",
+                            name="Groundwater Level",
+                            line=dict(color="#0284c7", width=2),
+                            marker=dict(size=4, color="#0284c7"),
+                        ))
+
+                        mean_val = float(gw["value"].mean())
+                        min_val = float(gw["value"].min())
+                        max_val = float(gw["value"].max())
+
+                        fig.add_hline(
+                            y=mean_val,
+                            line=dict(color="#94a3b8", dash="dash", width=1.5),
+                            annotation_text=f"Mean: {mean_val:.2f} {unit}",
+                            annotation_position="bottom right",
+                        )
+
+                        fig.update_layout(
+                            title=f"{st_pick} · Groundwater Level Hydrograph",
+                            xaxis_title="Date / Time",
+                            yaxis_title=f"Water Level / Depth ({unit})",
+                            template="plotly_dark" if dark else "plotly_white",
+                            font=dict(family="IBM Plex Mono, monospace"),
+                            height=480,
+                            margin=dict(l=40, r=40, t=50, b=40),
+                            hovermode="x unified",
+                        )
+                        if inv_y:
+                            fig.update_yaxes(autorange="reversed")
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Summary Metrics
+                        g1, g2, g3, g4 = st.columns(4)
+                        g1.metric("Min Level", f"{min_val:.2f} {unit}")
+                        g2.metric("Mean Level", f"{mean_val:.2f} {unit}")
+                        g3.metric("Max Level", f"{max_val:.2f} {unit}")
+                        g4.metric("Fluctuation Range", f"{(max_val - min_val):.2f} {unit}")
+
             except Exception as e:
                 st.error(f"Plotting error: {e}")
 
     # Footer
-    st.markdown(CREDITS, unsafe_allow_html=True)
+    st.markdown(get_credits_html(dark), unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
