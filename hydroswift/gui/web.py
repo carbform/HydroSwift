@@ -76,8 +76,9 @@ def init_session():
         "active_state": None,
         "download_dir": "output",
         "rsms_daily": None,
-        "active_view": "discovery",
+        "active_view": "Hydrology Data",
         "show_discovery_modal": False,
+        "boundary_mode": "Hydrological (Basin)",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -86,13 +87,13 @@ def init_session():
 
 def render_rsms_view(dark: bool):
     """Dedicated CWC National Reservoirs module, completely decoupled from station discovery."""
-    st.markdown("## 🌊 CWC National Reservoirs (RSMS Live Storage)")
+    st.markdown("## National Reservoirs (RSMS Live Storage)")
     st.caption("Central Water Commission Real-Time Reservoir Storage Monitoring System for ~180 major Indian reservoirs.")
 
     # Top Action Bar for Reservoirs
     r_top1, r_top2, r_top3 = st.columns([3, 1, 2])
-    fetch_rsms = r_top1.button("🌊 Fetch Live Reservoir Status (CWC RSMS)", type="primary", use_container_width=True)
-    refresh_rsms = r_top2.button("🔄 Refresh", use_container_width=True)
+    fetch_rsms = r_top1.button("Fetch Live Status", type="primary", use_container_width=True)
+    refresh_rsms = r_top2.button("Refresh", use_container_width=True)
 
     if refresh_rsms:
         st.session_state["rsms_daily"] = None
@@ -127,7 +128,7 @@ def render_rsms_view(dark: bool):
 
             # Export button in top bar
             csv_bytes = df_calc.to_csv(index=False).encode("utf-8")
-            r_top3.download_button("⬇️ Export Reservoirs CSV", data=csv_bytes, file_name="cwc_rsms_reservoirs.csv", mime="text/csv", use_container_width=True)
+            r_top3.download_button("Export CSV", data=csv_bytes, file_name="cwc_rsms_reservoirs.csv", mime="text/csv", use_container_width=True)
 
             # Metric Cards
             m1, m2, m3, m4 = st.columns(4)
@@ -136,7 +137,7 @@ def render_rsms_view(dark: bool):
             m3.metric("Live Storage Monitored", f"{total_cur:.1f} BCM", f"{nat_pct:.1f}%")
             m4.metric("Critical Reservoirs (<40%)", f"{critical_count}")
 
-            st.markdown("### 🗺️ Interactive National Reservoir Storage Map")
+            st.markdown("### National Reservoir Storage Map")
             res_geojson_layers = []
             ind_geo = load_india_boundary_geojson()
             if ind_geo.get("features"):
@@ -160,7 +161,7 @@ def render_rsms_view(dark: bool):
             )
             components.html(res_map.to_html(), height=580, scrolling=False)
 
-            st.markdown("### 📋 Monitored Reservoirs Table")
+            st.markdown("### Monitored Reservoirs Table")
             search_res = st.text_input("Filter reservoirs table", placeholder="Type reservoir name or ID...")
             view_df = df_calc.copy()
             if search_res:
@@ -169,48 +170,50 @@ def render_rsms_view(dark: bool):
             disp_cols = [c for c in ["reservoir_unique_id", "reservoir_name", "storage_bcm", "live_cap_bcm", "gross_cap_bcm", "storage_pct", "frl_meter", "entry_date"] if c in view_df.columns]
             st.dataframe(view_df[disp_cols], use_container_width=True, height=380)
     else:
-        st.info("Click **🌊 Fetch Live Reservoir Status (CWC RSMS)** above to load and display live capacity pins for ~180 reservoirs across India.")
+        st.info("Click **Fetch Live Status** above to load and display live capacity pins for ~180 reservoirs across India.")
 
 
 def main():
     st.set_page_config(
         page_title="HydroSwift · Hydrological Studio",
-        page_icon="⚡",
         layout="wide",
         initial_sidebar_state="expanded",
     )
     init_session()
 
+    # Dark mode toggle state
+    if "dark" not in st.session_state:
+        st.session_state["dark"] = False
+
     # Top Header Bar: Brand + View Switcher + Dark Mode Toggle
     head_col, nav_col, dark_col = st.columns([4, 6, 2])
     with head_col:
         st.markdown(
-            '<div style="font-size: 1.55rem; font-weight: 700; letter-spacing: -0.02em; padding-top: 0.1rem;">'
-            '<span>Hydro</span><span style="color: #38bdf8;">Swift</span>'
-            '<span style="font-size: 0.72rem; font-weight: 400; color: #6b7a89; margin-left: 0.6rem; '
+            '<div style="font-size: 1.55rem; font-weight: 700; letter-spacing: -0.02em; padding-top: 0.15rem;">'
+            '<span>Hydro</span><span style="color: #2563eb;">Swift</span>'
+            '<span style="font-size: 0.72rem; font-weight: 600; color: #64748b; margin-left: 0.6rem; '
             'letter-spacing: 0.08em; text-transform: uppercase;">Hydrological Data Studio</span>'
             '</div>',
             unsafe_allow_html=True,
         )
 
     with nav_col:
-        # Separate CWC Reservoir tab/button at the top
-        view_modes = ["⚡ Hydrological Discovery & Visualizer", "🌊 CWC Reservoirs (RSMS)"]
-        cur_view_idx = 1 if st.session_state.get("active_view") == "rsms" else 0
+        # Module Switcher: Hydrology Data vs. Reservoir Status
+        view_modes = ["Hydrology Data", "Reservoir Status"]
+        if st.session_state.get("active_view") not in view_modes:
+            st.session_state["active_view"] = "Hydrology Data"
+
         active_view_choice = st.radio(
             "Module Switcher",
             view_modes,
-            index=cur_view_idx,
+            key="active_view",
             horizontal=True,
             label_visibility="collapsed",
-            key="app_view_switcher",
         )
-        is_rsms = (active_view_choice == "🌊 CWC Reservoirs (RSMS)")
-        st.session_state["active_view"] = "rsms" if is_rsms else "discovery"
+        is_rsms = (active_view_choice == "Reservoir Status")
 
     with dark_col:
-        dark = st.toggle("Dark mode", value=st.session_state.get("dark", False), key="dark_mode_toggle")
-        st.session_state["dark"] = dark
+        dark = st.toggle("Dark mode", key="dark")
 
     st.markdown(stylesheet(dark), unsafe_allow_html=True)
 
@@ -220,11 +223,11 @@ def main():
     if is_rsms:
         with st.sidebar:
             st.markdown(sidebar_brand(dark), unsafe_allow_html=True)
-            st.markdown("### 🌊 CWC RSMS Module")
+            st.markdown("### CWC RSMS Module")
             st.caption("Real-Time Reservoir Storage Monitoring System operated by Central Water Commission.")
             st.info("This module operates independently from station search & catalog discovery.")
-            if st.button("⬅️ Switch to Station Discovery", use_container_width=True):
-                st.session_state["active_view"] = "discovery"
+            if st.button("Switch to Hydrology Data", use_container_width=True):
+                st.session_state["active_view"] = "Hydrology Data"
                 st.rerun()
 
         render_rsms_view(dark)
@@ -238,10 +241,14 @@ def main():
         st.markdown(sidebar_brand(dark), unsafe_allow_html=True)
 
         st.header("1 · Boundary & Scope")
+        boundary_modes = ["Hydrological (Basin)", "Administrative (State)", "All / Custom"]
+        if st.session_state.get("boundary_mode") not in boundary_modes:
+            st.session_state["boundary_mode"] = "Hydrological (Basin)"
+
         boundary_mode = st.radio(
             "Boundary Type",
-            ["Hydrological (Basin)", "Administrative (State)", "All / Custom"],
-            index=0,
+            boundary_modes,
+            key="boundary_mode",
             horizontal=True,
             help="Hydrological queries search CWC/WRIS river basins and cross-discover constituent NWDP state data.",
         )
@@ -260,7 +267,7 @@ def main():
                 st.session_state["active_basin"] = selected_basin
                 constituent_states = get_states_for_basin(selected_basin)
                 if constituent_states:
-                    st.caption(f"📍 **Constituent States**: {', '.join(constituent_states)}")
+                    st.caption(f"**Constituent States**: {', '.join(constituent_states)}")
             else:
                 st.session_state["active_basin"] = None
 
@@ -274,7 +281,7 @@ def main():
                 st.session_state["active_state"] = selected_state
                 intersecting_basins = get_basins_for_state(selected_state)
                 if intersecting_basins:
-                    st.caption(f"🌊 **Intersecting Basins**: {', '.join(intersecting_basins)}")
+                    st.caption(f"**Intersecting Basins**: {', '.join(intersecting_basins)}")
             else:
                 st.session_state["active_state"] = None
         else:
@@ -358,14 +365,20 @@ def main():
     # Discovery Pop-Up Modal (Opens automatically after Search & Discover)
     # -------------------------------------------------------------------------
     if st.session_state.get("show_discovery_modal") and cat is not None and not cat.empty:
+        c_line = "#475569" if dark else "#0f172a"
+        c_field = "#131b2e" if dark else "#ffffff"
+        c_shadow = "rgba(0, 0, 0, 0.75)" if dark else "#0f172a"
+        c_ink = "#f8fafc" if dark else "#0f172a"
+        c_muted = "#94a3b8" if dark else "#64748b"
+
         with st.container():
             st.markdown(
-                '<div style="border: 2px solid #38bdf8; border-radius: 8px; padding: 1rem 1.2rem; '
-                'background: rgba(56, 189, 248, 0.06); margin-bottom: 1.2rem;">'
+                f'<div style="border: 1.5px solid {c_line}; border-radius: 4px; padding: 1rem 1.2rem; '
+                f'background: {c_field}; box-shadow: 2.5px 2.5px 0px {c_shadow}; margin-bottom: 1.2rem;">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center;">'
-                f'<h3 style="margin:0; font-size:1.15rem; color:#0284c7;">✨ Discovered {total_discovered:,} Datasets & Stations</h3>'
+                f'<div style="font-size:1.15rem; font-weight:700; color:{c_ink};">Discovered {total_discovered:,} Datasets & Stations</div>'
                 f'</div>'
-                f'<div style="font-size:0.85rem; color:#64748b; margin-top:0.2rem;">'
+                f'<div style="font-size:0.82rem; color:{c_muted}; margin-top:0.25rem;">'
                 f'Catalog discovery complete across constituent boundaries and enabled sources.'
                 f'</div></div>',
                 unsafe_allow_html=True,
@@ -373,16 +386,16 @@ def main():
 
             # Modal selection & action buttons
             mcol1, mcol2, mcol3, mcol4 = st.columns(4)
-            if mcol1.button(f"📦 Select All ({total_discovered})", key="modal_sel_all", use_container_width=True):
+            if mcol1.button(f"Select All ({total_discovered})", key="modal_sel_all", use_container_width=True):
                 st.session_state["basket"] = cat.copy()
                 st.rerun()
-            if mcol2.button("⚡ First 10 Stations", key="modal_sel_10", use_container_width=True):
+            if mcol2.button("First 10 Stations", key="modal_sel_10", use_container_width=True):
                 st.session_state["basket"] = cat.head(10).copy()
                 st.rerun()
-            if mcol3.button("🗺️ View on Map", key="modal_view_map", use_container_width=True):
+            if mcol3.button("View on Map", key="modal_view_map", use_container_width=True):
                 st.session_state["show_discovery_modal"] = False
                 st.rerun()
-            if mcol4.button("✕ Close Pop-up", key="modal_close", use_container_width=True):
+            if mcol4.button("Close Pop-up", key="modal_close", use_container_width=True):
                 st.session_state["show_discovery_modal"] = False
                 st.rerun()
 
@@ -399,7 +412,7 @@ def main():
         dcol_btn, dcol_fmt, dcol_path, dcol_browse = st.columns([3, 2, 5, 2])
 
         dl_clicked = dcol_btn.button(
-            f"⬇️ Download Data ({basket_len})",
+            f"Download Selected ({basket_len})",
             disabled=(basket_len == 0),
             type="primary",
             use_container_width=True,
@@ -411,7 +424,7 @@ def main():
         dest_dir = dcol_path.text_input("Download Destination Folder", value=cur_dir, label_visibility="collapsed", key="top_dest_input")
         st.session_state["download_dir"] = dest_dir
 
-        if dcol_browse.button("📁 Browse…", use_container_width=True, help="Open native operating system folder selection popup"):
+        if dcol_browse.button("Browse…", use_container_width=True, help="Open native operating system folder selection popup"):
             chosen = choose_folder(start=dest_dir, title="Select HydroSwift Download Destination")
             if chosen:
                 st.session_state["download_dir"] = chosen
@@ -492,12 +505,12 @@ def main():
     st.markdown('<div style="height: 0.6rem;"></div>', unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
-    # Main Tabs: Map Layers, Discovered Catalog, Hydrological Visualizer
+    # Main Tabs: Map Layers, Discovered Catalog, Visualize
     # -------------------------------------------------------------------------
     tab_map, tab_catalog, tab_plots = st.tabs([
-        "🗺️ Map Layers",
-        "📋 Discovered Catalog",
-        "📊 Hydrological Visualizer",
+        "Map Layers",
+        "Discovered Catalog",
+        "Visualize",
     ])
 
     # -------------------------------------------------------------------------
@@ -520,9 +533,9 @@ def main():
 
         # Official shapefile overlay toggles
         lcol1, lcol2, lcol3 = st.columns(3)
-        show_india = lcol1.checkbox("🇮🇳 India National Boundary", value=True, help="Official survey boundary of India")
-        show_basins = lcol2.checkbox("🌊 CWC River Basins", value=True, help="Official Central Water Commission basin boundaries")
-        show_aquifers = lcol3.checkbox("🪨 Major Aquifers", value=False, help="India-WRIS / CGWB hydrogeological aquifer systems")
+        show_india = lcol1.checkbox("India National Boundary", value=True, help="Official survey boundary of India")
+        show_basins = lcol2.checkbox("CWC River Basins", value=True, help="Official Central Water Commission basin boundaries")
+        show_aquifers = lcol3.checkbox("Major Aquifers", value=False, help="India-WRIS / CGWB hydrogeological aquifer systems")
 
         geojson_layers = []
 
@@ -605,17 +618,17 @@ def main():
             # Selection Shortcuts
             st.markdown("**Selection Shortcuts**")
             bcol1, bcol2, bcol3, bcol4 = st.columns(4)
-            if bcol1.button("⚡ First 5 Stations", use_container_width=True):
+            if bcol1.button("First 5 Stations", use_container_width=True):
                 st.session_state["basket"] = display_df.head(5).copy()
                 st.success("Selected first 5 items.")
                 st.rerun()
 
-            if bcol2.button("⚡ First 10 Stations", use_container_width=True):
+            if bcol2.button("First 10 Stations", use_container_width=True):
                 st.session_state["basket"] = display_df.head(10).copy()
                 st.success("Selected first 10 items.")
                 st.rerun()
 
-            if bcol3.button(f"➕ Add Filtered ({len(display_df)})", use_container_width=True):
+            if bcol3.button(f"Add Filtered ({len(display_df)})", use_container_width=True):
                 if st.session_state.get("basket") is None:
                     st.session_state["basket"] = display_df.copy()
                 else:
@@ -623,7 +636,7 @@ def main():
                 st.success(f"Updated selection: {len(st.session_state['basket'])} items.")
                 st.rerun()
 
-            if bcol4.button(f"📦 Select All ({len(cat)}) Items", use_container_width=True):
+            if bcol4.button(f"Select All ({len(cat)})", use_container_width=True):
                 st.session_state["basket"] = cat.copy()
                 st.success(f"Selected all {len(cat)} items.")
                 st.rerun()
@@ -635,11 +648,11 @@ def main():
                 st.success(f"Saved catalog to `{out_p}`")
 
     # -------------------------------------------------------------------------
-    # TAB 3: Hydrological Visualizer
+    # TAB 3: Visualize
     # -------------------------------------------------------------------------
     with tab_plots:
         if tidy is None or tidy.empty:
-            st.info("Fetch data first using the **⬇️ Download Data** button at the top to visualize time series.")
+            st.info("Fetch data first using the **Download Selected** button at the top to visualize time series.")
         else:
             pcol1, pcol2 = st.columns([3, 2])
             stations = sorted(tidy["station_name"].dropna().unique().tolist())
