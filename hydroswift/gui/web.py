@@ -517,20 +517,6 @@ def main():
     # TAB 1: Map Layers with Auto-Zoom & Official Shapefile Overlays
     # -------------------------------------------------------------------------
     with tab_map:
-        mcol1, mcol2 = st.columns([3, 1])
-        basemap = mcol1.selectbox(
-            "Basemap Style",
-            ["osm", "topo", "satellite", "opentopo"],
-            index=0,
-            format_func=lambda x: {
-                "osm": "OpenStreetMap",
-                "topo": "Esri Topographic",
-                "satellite": "Esri World Imagery (Satellite)",
-                "opentopo": "OpenTopoMap",
-            }[x],
-        )
-        color_by = mcol2.selectbox("Color Markers By", ["source", "status"], index=0)
-
         # Official shapefile overlay toggles
         lcol1, lcol2, lcol3 = st.columns(3)
         show_india = lcol1.checkbox("India National Boundary", value=True, help="Official survey boundary of India")
@@ -580,14 +566,14 @@ def main():
         # Calculate bounding box for auto-zoom
         target_bounds = get_basin_bounds(b_name) if (b_name and b_name != "All Basins") else None
 
-        # Build interactive map
+        # Build interactive map (basemap defaults to osm, markers colored by data source)
         map_data = cat if cat is not None and not cat.empty else pd.DataFrame()
         try:
             hmap = create_map(
                 map_data,
                 output=None,
-                basemap=basemap,
-                color_by=color_by,
+                basemap="osm",
+                color_by="source",
                 cluster=True,
                 bounds=target_bounds,
                 geojson_layers=geojson_layers,
