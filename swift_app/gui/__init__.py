@@ -1,8 +1,8 @@
 """
 HydroSwift GUI Module
 
-A PyQt5-based graphical user interface for HydroSwift,
-providing intuitive access to hydrological data discovery and download workflows.
+Modern web-based dashboard studio for HydroSwift,
+providing intuitive access to hydrological data discovery, visualization, and monitoring.
 """
 
 from __future__ import annotations

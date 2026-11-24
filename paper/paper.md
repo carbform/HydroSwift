@@ -1,11 +1,12 @@
 ---
-title: 'HydroSwift: Simple Water Information Fetch Tool'
+title: 'HydroSwift: Fast, Unified Workflows for Indian Hydrological Data'
 tags:
   - Python
   - hydrology
   - water resources
   - India
   - open data
+  - remote sensing
 authors:
   - name: C. Sarat
     orcid: 0000-0002-5870-7557
@@ -17,55 +18,61 @@ authors:
 affiliations:
   - name: Water Resources Group, National Remote Sensing Centre, ISRO, Hyderabad 500037, India
     index: 1
-date: 12 March 2026
+date: 24 November 2026
 bibliography: paper.bib
 ---
 
 # Summary
 
-The Simple Water Information Fetch Tool (`HydroSwift`) is an open-source Python package and command-line interface designed to automate the retrieval of hydrological station data from public Indian portals. Hydrological data such as river discharge, water level, rainfall, and groundwater levels are critical for water resource management, climate change studies, and basic research in hydrology. Currently, HydroSwift supports data fetching from the India Water Resources Information System (India-WRIS) and the Central Water Commission (CWC) Flood Forecasting System. By automating the discovery of basins and stations, downloading time-series observations, and providing utilities for merging into geospatial formats, HydroSwift enables reproducible and efficient workflows for working with Indian hydrological data.
+The Simple Water Information Fetch Tool (`HydroSwift`) is an open-source Python package, command-line interface, and graphical workbench designed to automate the discovery, retrieval, standardization, and visualization of terrestrial hydrological data from public Indian portals. Hydrological observations—such as river discharge, water levels, reservoir storage, rainfall, groundwater levels, and allied meteorological parameters—are essential for catchment water budgeting, flood risk forecasting, climate impact assessments, and hydrological modeling. 
+
+HydroSwift seamlessly integrates observation streams across:
+1. The **National Water Data Portal** (NWDP, managed by the National Water Informatics Centre / NWIC on CKAN),
+2. The **Central Water Commission Flood Forecasting System** (CWC FFS),
+3. The **CWC Reservoir Storage Monitoring System** (CWC RSMS), and
+4. The **India-WRIS REST API Catalog**.
+
+HydroSwift organizes data access around a unified four-stage paradigm: **Find $\rightarrow$ Review $\rightarrow$ Get $\rightarrow$ Use**. It translates disparate upstream formats into consistent, provenance-tracked, tidy dataframes ready for scientific modeling and spatial analysis.
 
 # Statement of need
 
-Researchers and hydrological practitioners often face significant hurdles when acquiring observational data from centralized repositories in India. Currently, data access relies on portals such as the National Water Informatics Centre (NWIC) [@nwic], which require manual web navigation and repetitive downloads through interactive maps or forms. Furthermore, critical historical data like groundwater levels are often published as static PDF documents by agencies like the Central Ground Water Board [@cgwb_pdf], which are extremely difficult to parse automatically for large-scale analysis. This manual approach is highly prone to error, difficult to scale to multiple basins or variables, and fundamentally hinders reproducible research. 
+Hydrologists, climate scientists, and practitioners in India routinely encounter substantial friction when assembling observational records from government repositories. Historically, data access has been fragmented across isolated portals:
+* India-WRIS and NWDP [@nwic] historically provided bulk datasets across state and central agencies via heterogeneous CKAN DataStore structures and static batches.
+* The Central Water Commission Flood Forecasting System provides real-time river stage telemetry, yet river discharge is not directly published as telemetry and requires hydraulic rating curves to compute from water levels [@patidar2024guardian].
+* Critical reservoir storage time series have historically been locked in published weekly PDF bulletins or dynamic cryptographic handshakes on RSMS [@cwc].
 
-While the NWIC and India-WRIS maintain Application Programming Interfaces (APIs), including Swagger UI endpoints, these backend services are primarily optimized for their own web applications. They lack structured programmatic wrappers, user-friendly documentation, and require complex workflows—such as GUI-based token generation for individual datasets, session cookie persistence, and managing undocumented payload structures. Such architectures are antithetical to the reproducible, shell-scriptable workflows necessary for bulk scientific analysis. 
+Before HydroSwift, researchers were forced to write fragile, unmaintained web scrapers or perform repetitive manual downloads across dozens of portal webforms. These ad-hoc approaches hinder reproducibility, cannot scale to national multi-basin studies, and create significant barriers to building large-sample hydrological benchmarks such as CAMELS-IND [@mangukiya2025camels] and other recent compilations [@wrr2025].
 
-`HydroSwift` was designed to bridge this gap, partly inspired by recent efforts to construct comprehensive sub-daily river discharge networks over India for the GUARDIAN dataset [@patidar2024guardian]. HydroSwift abstract away the complex session persistence, pagination, and undocumented API quirks of the government endpoints. It provides both a simple command-line interface for shell-based automation and a Python API for integration into larger analytical pipelines. Crucially, as the community leans towards relying on large-sample open datasets, HydroSwift will be immensely useful for continually updating and maintaining published hydrological datasets for Indian basins, such as CAMELS-IND [@mangukiya2025camels] and other recent large-scale hydrological compilations [@wrr2025]. 
+HydroSwift solves these challenges by providing a standardized, resilient, and fully scriptable library. It abstracts network retries, pagination, date filtering, and format normalization into clean Python and CLI interfaces. Every download generates a cryptographically sound `manifest.json` recording query parameters, endpoints, record counts, and actual observation spans, establishing full data provenance for reproducible science.
 
 # Functionality and Features
 
-HydroSwift goes beyond simple data retrieval. It is designed as a comprehensive data processing utility tailored for hydrological analysis. 
+HydroSwift implements a cohesive end-to-end scientific pipeline:
 
-**Data Retrieval**: The tool currently supports robust, parallelized fetching of nine critical terrestrial variables from the India-WRIS and CWC portals: 
-* River Discharge
-* River Water Level
-* Rainfall
-* Atmospheric Pressure
-* Temperature
-* Relative Humidity
-* Solar Radiation
-* Suspended Sediment
-* Groundwater Levels
+* **Unified Discovery (`search`)**: Enables concurrent querying across all supported data sources using common physical variable names (e.g., `rainfall`, `water_level`, `discharge`, `groundwater_level`, `reservoir_storage`) and geographical filters (states, districts, major basins, and tributaries).
+* **Provenance & Volume Review (`estimate`)**: Before initiating network-intensive downloads, HydroSwift inspects per-source query health (`source_status`), reports any dropped or truncated resources, and calculates server-reported record count estimates.
+* **Resilient, Resumable Fetching (`fetch`)**: Downloads observations with progress callbacks, cancellation hooks, and automatic manifest resumption, eliminating redundant downloads of identical datasets.
+* **Universal Tidy Standardization (`load`)**: Transforms heterogeneous raw records (CKAN tables, sub-daily telemetry, and REST JSON) into a single, standardized tidy long DataFrame (`time`, `value`, `variable`, `unit`, `station_id`, `station_name`, `lat`, `lon`, `source`, `agency`, `method`, `flag`). Physical units are normalized (e.g., mm, m, $\text{m}^3/\text{s}$, BCM, $^\circ\text{C}$).
+* **Operational Flood Forecasting & Rating Curves**: For CWC river gauging stations, HydroSwift incorporates hydraulic rating curves calibrated under the GUARDIAN dataset methodology [@patidar2024guardian] to estimate river discharge ($\text{m}^3/\text{s}$) from river stage.
+* **Reservoir Storage Monitoring (RSMS)**: Automates real-time daily storage snapshots across 180+ major national reservoirs and includes layout-preserving PDF table extraction to backfill decades of historical weekly bulletin archives.
+* **Export, Hydrological Plotting & Map Layers (`merge`, `plot`, `map`)**: Directly compiles observations into compressed Parquet, geospatial GeoPackage (`*.gpkg`), or CSV formats. Generates rich hydrological figures including dual-axis hydrographs (stage & discharge), precipitation hyetographs, hydraulic rating curves ($H-Q$), and flow duration curves (FDCs) with CWC flood threshold alert lines (Warning, Danger, HFL). Produces standalone interactive Leaflet map layers with multi-basemap switching, marker clustering, flood alert highlights, and custom GeoJSON catchment overlays.
+* **Single-Screen Workbench GUI**: HydroSwift includes an offscreen-tested PyQt5 desktop workbench providing interactive search filtering, provenance tracking, download progress bars, embedded plotting, and one-click station mapping.
 
-**Data Processing**: Downloading time series is only the first step in hydrological modeling workflows. HydroSwift natively includes data processing pipelines to merge individual, station-level CSVs into unified geospatial formats (GeoPackage `*.gpkg` files) by attaching geographic coordinates from station metadata. This allows researchers to immediately load entire basin networks into spatial tools like QGIS or GeoPandas.
+# Modular Architecture
 
-**First-Cut Plotting**: To speed up exploratory data analysis (EDA), HydroSwift includes built-in hydrograph and time-series plotting utilities. Researchers can rapidly generate "first-cut" visualizations of the downloaded data directly from the CLI to visually inspect data continuity and identify hydrologic extremes before moving into complex modeling.
+HydroSwift is architected into clean, decoupled layers:
+
+1. **`hydroswift.core`**: Houses the engine orchestration (`search_catalog`, `fetch_catalog`, `manifest`), the universal tidy data model (`load`, unit normalizers, canonical vocabularies), and consolidated export and visualization utilities (`merge`, `plot`, `map`).
+2. **`hydroswift.sources`**: Pluggable source adapters (`nwdp`, `cwc_ffs`, `cwc_rsms`, `wris_api`) implementing independent client protocols, authentication, and endpoint pagination.
+3. **`hydroswift.gui`**: Single-screen reactive workbench implementing the Find-Review-Get-Use workflow.
+4. **`hydroswift.experimental`**: Staged research components, including multi-source satellite altimetry validation linking Surface Water and Ocean Topography (SWOT) KaRIn passes with in-situ reservoir storage bulletins.
 
 # State of the field
 
-Existing mature software tools for hydrological data retrieval largely focus on generic global datasets or specific non-Indian agencies, such as the `dataRetrieval` ecosystem for the USGS [@decicco2015dataretrieval] and the `HyRiver` suite in Python [@chegini2021hyriver]. For Indian basins, researchers have historically resorted to writing one-off web scraping or API query scripts tailored to a single analysis. These scripts are rarely generalized, maintained, or tested. `HydroSwift` provides a stable, community-maintained interface equivalently robust to established international tools, natively handling the complex authentication, session persistence, and API pagination inherent in Indian systems like India-WRIS [@indiawris] and CWC [@cwc].
-
-# Architecture
-
-`HydroSwift` is structured into two main components:
-1. **Core Download Engine**: Handles the HTTP interactions, API session management, retries, and data parsing (`api.py`, `cwc.py`, `download.py`). It employs exponential backoff for resilience against transient network failures.
-2. **User Interface Layer**: Provides a robust Command Line Interface (`cli.py`) built with standard libraries, alongside a flexible Python API (`api_public.py`) that mirrors the CLI commands for programmatic use.
-
-The project is designed to be easily extensible. New hydrological data portals can be integrated by subclassing or extending the base API client patterns, without needing to rewrite the CLI or exporting utilities. 
+Existing hydrological software frameworks such as `dataRetrieval` for the USGS [@decicco2015dataretrieval] and `HyRiver` [@chegini2021hyriver] have demonstrated the transformative value of standardized programmatic data access for water science in the United States. `HydroSwift` provides an equivalent, robust open-source ecosystem dedicated to Indian water data, establishing reproducible pipelines from national portals to hydrological models.
 
 # Acknowledgements
 
-We acknowledge the India Water Resources Information System (India-WRIS) and the Central Water Commission (CWC) for making hydrological data publicly accessible.
+We acknowledge the National Water Informatics Centre (NWIC), the India Water Resources Information System (India-WRIS), and the Central Water Commission (CWC) for publishing open hydrological observations.
 
 # References

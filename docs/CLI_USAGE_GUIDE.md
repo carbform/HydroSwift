@@ -1,244 +1,102 @@
-# CLI Usage Guide
+# HydroSwift CLI Usage Guide
 
-HydroSwift provides a flag-based CLI.
+HydroSwift provides a fast, robust command-line interface (`hyswift`) that mirrors the same **Find $\rightarrow$ Review $\rightarrow$ Get $\rightarrow$ Use** workflow available in Python and the Web Studio.
 
-Run it as:
+---
 
-```bash
-hyswift ...
-```
-
-or, if the console script is not on your path:
+## Command Overview
 
 ```bash
-python -m hydroswift ...
-```
+# Guided interactive prompt mode
+hyswift
 
-## 1. Important!
+# Launch modern Web Studio
+hyswift gui
+hyswift-gui
 
-The CLI is **flag-based**, not subcommand-based.
+# Search catalogs across CWC, WRIS, and NWDP
+hyswift search rainfall --where Karnataka --period 2020:2024 --save cat.json
+hyswift search discharge --basin Cauvery --sources CWC --save cauvery.json
 
-You compose a command from:
+# Download data from saved catalog
+hyswift get --from cat.json --rows 0:5 --out output
 
-- a source selection (`-b/--basin` for WRIS, or `--cwc` / `--station` / `--cwc-basin` for CWC)
-- one or more WRIS dataset flags if you are using WRIS
-- optional output/date/plot/merge flags
+# Tidy summary and unified merge
+hyswift show output
+hyswift merge output output/merged.parquet
 
-Example:
+# Generate summary hydrograph plots
+hyswift plot output output/plots
 
-```bash
-hyswift -b Krishna -q -rf -temp
+# Real-time CWC Reservoir Storage bulletin
+hyswift rsms daily
 ```
 
 ---
 
-## 2. WRIS mode
-
-WRIS is the default mode when you provide a basin and at least one WRIS dataset flag.
-
-### Required pieces
-
-- `-b` / `--basin`
-- one or more dataset flags such as `-q`, `-wl`, `-rf`, etc.
-
-### Basin values
-
-You can pass either:
-
-- a basin name, such as `Krishna`
-- a WRIS basin number, such as `6`
-
-Examples:
-
+## 1. `search`
+Search across observational networks and open data portals:
 ```bash
-hyswift -b 5 -q
-hyswift -b Krishna -q -rf -temp
-hyswift -b Godavari --discharge --rainfall --temperature
+hyswift search [query] [--where TEXT] [--basin NAME] [--state NAME] [--ids ID1,ID2] [--sources CWC WRIS NWDP] [--period YYYY:YYYY] [--estimate] [--save FILE] [--limit N]
 ```
+
+* `query`: Variable keyword (e.g. `rainfall`, `discharge`, `water level`, `groundwater`).
+* `--where TEXT`: Free-form location keyword matched against station names and locations.
+* `--basin NAME`: Exact official CWC River Basin name (e.g. `Cauvery`, `Ganga`, `Godavari`, `Krishna`). Automatically cross-discovers constituent state open datasets.
+* `--state NAME`: Exact Indian State or Union Territory name.
+* `--sources`: One or more data sources (`CWC`, `WRIS`, `NWDP`).
+* `--period`: Temporal span as `START:END` (e.g. `2020:2024` or `2021-01-01:2023-12-31`).
+* `--estimate`: Queries exact record count estimates from supporting providers (NWDP).
+* `--save FILE`: Saves the discovered catalog along with full search provenance into JSON.
 
 ---
 
-## 3. WRIS dataset flags
-
-Current WRIS variable flags are:
-
-- `-q`, `--discharge`
-- `-wl`, `--water-level`
-- `-atm`, `--atm-pressure`
-- `-rf`, `--rainfall`
-- `-temp`, `--temperature`
-- `-rh`, `--humidity`
-- `-solar`, `--solar-radiation`
-- `-sed`, `--sediment`
-- `-gwl`, `--groundwater-level`
-
-Examples:
-
+## 2. `get`
+Download selected catalog items to disk:
 ```bash
-hyswift -b Godavari -q
-hyswift -b Krishna -q -rf -temp
-hyswift -b Krishna --discharge --rainfall
+hyswift get --from FILE [--rows SPEC] [--period P] [--out DIR] [--format csv|parquet|gpkg|json] [--overwrite]
 ```
+
+* `--from FILE`: Path to a JSON catalog saved by `hyswift search`.
+* `--rows SPEC`: Indices to download, e.g. `0,1,2` or range `0:10`.
+* `--out DIR`: Output folder (default: `output`).
+* `--format`: File format for downloads (`csv`, `parquet`, `gpkg`, `json`).
+* Every fetch writes a `manifest.json` recording query parameters, per-item status, record counts, and timestamps.
 
 ---
 
-## 4. CWC mode
+## 3. `show`, `merge`, `plot`
+Inspect, harmonize, and visualize downloaded observations:
 
-CWC downloads target water-level data.
+* **`hyswift show PATH`**:
+  Prints a clean tabular summary of downloaded tidy data (variables, units, station counts, record counts, and date spans).
+* **`hyswift merge PATH OUTPUT`**:
+  Harmonizes downloaded station files into one unified tidy table (`.parquet`, `.csv`, or `.gpkg`).
+* **`hyswift plot PATH [DIR] [--variable V]`**:
+  Generates publication-quality hydrograph plots for each station and variable into the target plot folder.
 
-You can enter CWC mode with any of the following:
-
-```bash
-hyswift --cwc
-hyswift --cwc-station 040-CDJAPR 032-LGDHYD
-hyswift --station 040-CDJAPR 032-LGDHYD
-hyswift --cwc-basin Krishna Godavari
-```
-
-### CWC flags
-
-- `--cwc`
-- `--cwc-station CODE [CODE ...]`
-- `--station CODE [CODE ...]` (alias of `--cwc-station`)
-- `--cwc-basin NAME [NAME ...]`
-- `--cwc-refresh`
-
-Examples aligned with the notebook:
-
-```bash
-hyswift --cwc
-hyswift --cwc-station 032-LGDHYD
-hyswift --cwc-basin Krishna
-```
-
-Behavior notes:
-
-- CWC mode does not support WRIS multi-variable downloads.
-- If you pass both station codes and basin filters, HydroSwift uses the matching intersection.
+`PATH` can be an output folder (automatically picks the latest manifest) or a specific `manifest.json`.
 
 ---
 
-## 5. Date and output controls
-
-Common download controls include:
-
-- `--start-date YYYY-MM-DD`
-- `--end-date YYYY-MM-DD`
-- `--output-dir PATH`
-- `--format csv|xlsx`
-- `--overwrite`
-- `--merge`
-- `--plot`
-- `--plot-svg`
-- `--plot-moving-average-window N`
-- `--quiet`
-- `--metadata`
-
-Examples:
-
+## 4. `gui`
+Launch the modern Streamlit web dashboard:
 ```bash
-hyswift -b 6 -q --start-date 2020-01-01 --end-date 2022-01-01
+hyswift gui
 ```
-
-```bash
-hyswift -b 5 -q --output-dir data --format csv --overwrite
-```
-
-```bash
-hyswift -b 5 -q --plot
-```
+Opens the browser studio at `http://localhost:8501`.
 
 ---
 
-## 6. Post-processing modes
-
-### Merge only
-
-Use existing downloaded files to generate GeoPackages.
-
+## 5. `rsms`
+Central Water Commission (CWC) Reservoir Storage Monitoring System tools:
 ```bash
-hyswift --merge-only --input-dir output
+# Fetch latest daily reservoir bulletin for ~180 national reservoirs
+hyswift rsms daily [--out CSV]
+
+# Backfill historical bulletins
+hyswift rsms backfill [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--out CSV]
+
+# Build harmonized reservoir geodatabase (SWOT satellite + in-situ gauge)
+hyswift rsms build --reservoir-shp PATH --swot-db PATH --gauge-cache PATH [--out-dir DIR]
 ```
-
-You can also specify the output folder
-
-```bash
-hyswift --merge-only --input-dir output --output-dir merged_output
-```
-
-### Plot only
-
-Use existing downloaded files to generate plots.
-
-```bash
-hyswift --plot-only --input-dir output
-```
-
-With quality options:
-
-```bash
-hyswift --plot-only --input-dir output --plot-svg --plot-moving-average-window 30
-```
-
----
-
-## 7. Metadata and utility commands
-
-### List mode
-
-```bash
-hyswift --list
-```
-
-This prints:
-
-- the WRIS basin list
-- the total number of known CWC stations
-
-### Other utility flags
-
-```bash
-hyswift --version
-hyswift --cite
-hyswift --coffee
-```
-
----
-
-## 8. CLI to Python equivalence
-
-The beginner notebook explicitly maps many CLI commands to Python API calls.
-
-Examples:
-
-| CLI | Python API |
-|---|---|
-| `hyswift -b 5 -q` | `hydroswift.wris.download(basin=5, variable='discharge')` |
-| `hyswift -b Krishna -q -rf -temp` | `hydroswift.wris.download(basin='Krishna', variable=['discharge', 'rainfall', 'temperature'])` |
-| `hyswift --merge-only --input-dir output` | `hydroswift.merge_only(input_dir='output')` |
-| `hyswift --plot-only --input-dir output` | `hydroswift.plot_only(input_dir='output')` |
-| `hyswift --cwc-station 032-LGDHYD` | `hydroswift.cwc.download(station=['032-LGDHYD'])` |
-| `hyswift --cwc-basin Krishna` | `hydroswift.cwc.download(basin=['Krishna'])` |
-
----
-
-## 9. Troubleshooting and common mistakes
-
-### "No dataset selected" in WRIS mode
-
-You must provide at least one WRIS dataset flag like `-q` or `-rf`.
-
-### `--merge-only` or `--plot-only` fails
-
-These modes require:
-
-- `--input-dir`
-- an input directory that already contains HydroSwift outputs
-
-### Mixing WRIS expectations into CWC mode
-
-CWC is a water-level workflow. If you need multiple WRIS variables, use WRIS mode with `-b` plus WRIS dataset flags.
-
-### Want table-driven workflows from the terminal?
-
-The CLI does not expose the same table-native dispatch model as `hydroswift.fetch(...)`. For discover → subset → fetch workflows, prefer the Python API.

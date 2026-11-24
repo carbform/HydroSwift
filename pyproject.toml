@@ -1,7 +1,24 @@
 [tool.setuptools]
-packages = ["swift_app", "hydroswift"]
+packages = [
+    "hydroswift",
+    "hydroswift.core",
+    "hydroswift.sources",
+    "hydroswift.sources.nwdp",
+    "hydroswift.sources.cwc_ffs",
+    "hydroswift.sources.cwc_rsms",
+    "hydroswift.sources.wris_api",
+    "hydroswift.experimental",
+    "hydroswift.gui",
+    "swift_app",
+    "swift_app.experimental",
+    "swift_app.gui",
+]
 
 [tool.setuptools.package-data]
+hydroswift = ["*.csv", "data/*.geojson"]
+"hydroswift.data" = ["*.geojson"]
+"hydroswift.gui" = ["app_assets/*"]
+"hydroswift.sources.cwc_ffs" = ["*.csv"]
 swift_app = ["*.csv"]
 
 [project]
@@ -17,7 +34,8 @@ dependencies = [
     "pandas",
     "tqdm",
     "openpyxl",
-    "matplotlib"
+    "matplotlib",
+    "cryptography"
 ]
 
 [project.urls]
@@ -27,14 +45,15 @@ Documentation = "https://hydroswift.readthedocs.io"
 [project.optional-dependencies]
 geo = ["geopandas", "shapely"]
 rich = ["rich"]
-gui = ["PyQt5>=5.15.0", "PyQt5-stubs"]
-all = ["geopandas", "shapely", "rich", "PyQt5>=5.15.0", "PyQt5-stubs"]
+gui = ["streamlit>=1.32.0", "plotly>=5.18.0"]
+all = ["geopandas", "shapely", "rich", "streamlit>=1.32.0", "plotly>=5.18.0"]
 
 [project.scripts]
 hyswift = "hydroswift.main:main"
-hyswift-gui = "swift_app.gui.app:main"
+hyswift-gui = "hydroswift.gui.app:main"
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:datetime.datetime.utcfromtimestamp\\(\\) is deprecated:DeprecationWarning"
