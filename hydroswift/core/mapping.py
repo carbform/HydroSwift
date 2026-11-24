@@ -200,6 +200,46 @@ def _extract_stations(data: Any) -> List[Dict[str, Any]]:
             })
         return stations
 
+    # Format 3: RSMS / Reservoir DataFrame (e.g. from hs.rsms.daily())
+    if "reservoir_name" in data.columns and ("latitude" in data.columns or "lat" in data.columns):
+        lat_col = "latitude" if "latitude" in data.columns else "lat"
+        lon_col = "longitude" if "longitude" in data.columns else "lon"
+        valid = data.dropna(subset=[lat_col, lon_col])
+        for _, r in valid.iterrows():
+            uid = str(r.get("reservoir_unique_id") or "")
+            name = str(r.get("reservoir_name") or uid or "Reservoir")
+            live_cap = float(r.get("live_cap_bcm") or 0.0)
+            storage = float(r.get("storage_bcm")) if pd.notna(r.get("storage_bcm")) and r.get("storage_bcm") is not None else None
+            pct = (storage / live_cap * 100.0) if (storage is not None and live_cap > 0) else None
+
+            status = "normal"
+            if pct is not None:
+                if pct < 40.0:
+                    status = "danger"
+                elif pct < 70.0:
+                    status = "warning"
+
+            stations.append({
+                "id": uid,
+                "name": name,
+                "lat": float(r[lat_col]),
+                "lon": float(r[lon_col]),
+                "source": "CWC-RSMS",
+                "variable": "Reservoir Live Storage",
+                "units": "BCM",
+                "latest_value": round(storage, 3) if storage is not None else None,
+                "latest_unit": "BCM",
+                "latest_time": str(r.get("entry_date") or ""),
+                "live_cap_bcm": round(live_cap, 3),
+                "gross_cap_bcm": round(float(r.get("gross_cap_bcm") or 0.0), 3),
+                "frl_meter": float(r.get("frl_meter")) if pd.notna(r.get("frl_meter")) else None,
+                "dsl_mtr": float(r.get("dsl_mtr")) if pd.notna(r.get("dsl_mtr")) else None,
+                "storage_pct": round(pct, 1) if pct is not None else None,
+                "alert_status": status,
+                "is_reservoir": True,
+            })
+        return stations
+
     return stations
 
 
@@ -248,6 +288,7 @@ def create_map(
     title: str = "HydroSwift Hydrological Stations",
     center: Optional[Tuple[float, float]] = None,
     zoom: Optional[int] = None,
+    bounds: Optional[List[List[float]]] = None,
 ) -> HydroMap:
     """Create a publication-ready interactive Leaflet map from catalog or tidy data.
 
@@ -273,6 +314,8 @@ def create_map(
         Initial map center coordinates. Automatically fitted to station bounds if None.
     zoom : int, optional
         Initial zoom level (1-18). Automatically computed if None.
+    bounds : list of [[min_lat, min_lon], [max_lat, max_lon]], optional
+        Custom geographic bounding box for map framing and auto-zoom.
 
     Returns
     -------
@@ -280,11 +323,15 @@ def create_map(
         Interactive map object with `.save()`, `.to_html()`, and Jupyter `_repr_html_()`.
     """
     stations = _extract_stations(data) if data is not None else []
-    if not stations and not geojson_layers:
+    if not stations and not geojson_layers and bounds is None:
         raise ValueError("No stations with geographic coordinates (lat/lon) found in input data.")
 
     # Compute bounding box
-    if stations:
+    if bounds is not None:
+        c_lat = (bounds[0][0] + bounds[1][0]) / 2 if center is None else center[0]
+        c_lon = (bounds[0][1] + bounds[1][1]) / 2 if center is None else center[1]
+        initial_zoom = zoom or 6
+    elif stations:
         lats = [s["lat"] for s in stations]
         lons = [s["lon"] for s in stations]
         min_lat, max_lat = min(lats), max(lats)
@@ -302,10 +349,17 @@ def create_map(
     parsed_layers = []
     if geojson_layers:
         for idx, lyr in enumerate(geojson_layers, 1):
-            gjson = _read_geojson_layer(lyr)
-            if gjson:
-                name = getattr(lyr, "name", None) or (Path(lyr).stem if isinstance(lyr, (str, Path)) else f"Layer {idx}")
-                parsed_layers.append({"name": str(name), "geojson": gjson})
+            if isinstance(lyr, dict) and "geojson" in lyr:
+                name = lyr.get("name", f"Layer {idx}")
+                gjson = _read_geojson_layer(lyr["geojson"])
+                style = lyr.get("style", {})
+                if gjson:
+                    parsed_layers.append({"name": str(name), "geojson": gjson, "style": style})
+            else:
+                gjson = _read_geojson_layer(lyr)
+                if gjson:
+                    name = getattr(lyr, "name", None) or (Path(lyr).stem if isinstance(lyr, (str, Path)) else f"Layer {idx}")
+                    parsed_layers.append({"name": str(name), "geojson": gjson, "style": {}})
 
     # Prepare JSON payload
     stations_json = json.dumps(stations, default=str)
@@ -446,7 +500,16 @@ def create_map(
 
       let rad = 7;
       let strokeColor = "#ffffff";
-      if (s.alert_status === "danger") {{
+      if (s.is_reservoir) {{
+        rad = Math.min(18, Math.max(7, Math.round(6 + (s.live_cap_bcm || 1) * 1.5)));
+        if (s.alert_status === "danger") {{
+          mColor = "#dc2626";
+        }} else if (s.alert_status === "warning") {{
+          mColor = "#f59e0b";
+        }} else {{
+          mColor = "#10b981";
+        }}
+      }} else if (s.alert_status === "danger") {{
         mColor = "#dc2626";
         rad = 9;
       }} else if (s.alert_status === "warning") {{
@@ -465,23 +528,44 @@ def create_map(
 
       // Popup content
       let alertBadge = "";
-      if (s.alert_status === "danger") {{
+      if (s.is_reservoir) {{
+        if (s.storage_pct !== null && s.storage_pct !== undefined) {{
+          if (s.storage_pct < 40) {{
+            alertBadge = `<span class="alert-pill alert-danger">${{s.storage_pct}}% (Low)</span>`;
+          }} else if (s.storage_pct < 70) {{
+            alertBadge = `<span class="alert-pill alert-warning">${{s.storage_pct}}%</span>`;
+          }} else {{
+            alertBadge = `<span class="alert-pill alert-normal">${{s.storage_pct}}% (Normal)</span>`;
+          }}
+        }}
+      }} else if (s.alert_status === "danger") {{
         alertBadge = '<span class="alert-pill alert-danger">Danger Exceeded</span>';
       }} else if (s.alert_status === "warning") {{
         alertBadge = '<span class="alert-pill alert-warning">Warning Level</span>';
       }}
 
       let rows = "";
-      if (s.basin) rows += `<tr><td class="label">Basin</td><td class="val">${{s.basin}}</td></tr>`;
-      if (s.river) rows += `<tr><td class="label">River</td><td class="val">${{s.river}}</td></tr>`;
-      if (s.state) rows += `<tr><td class="label">State</td><td class="val">${{s.state}}</td></tr>`;
-      if (s.variable) rows += `<tr><td class="label">Variable</td><td class="val">${{s.variable}}</td></tr>`;
-      if (s.latest_value !== undefined && s.latest_value !== null) {{
-        rows += `<tr><td class="label">Latest (${{s.latest_time ? s.latest_time.slice(0,10) : ''}})</td><td class="val">${{s.latest_value}} ${{s.latest_unit || ''}}</td></tr>`;
+      if (s.is_reservoir) {{
+        if (s.latest_value !== undefined && s.latest_value !== null) {{
+          rows += `<tr><td class="label">Live Storage</td><td class="val">${{s.latest_value}} BCM</td></tr>`;
+        }}
+        if (s.live_cap_bcm) rows += `<tr><td class="label">Live Capacity</td><td class="val">${{s.live_cap_bcm}} BCM</td></tr>`;
+        if (s.gross_cap_bcm) rows += `<tr><td class="label">Gross Capacity</td><td class="val">${{s.gross_cap_bcm}} BCM</td></tr>`;
+        if (s.frl_meter) rows += `<tr><td class="label">FRL</td><td class="val">${{s.frl_meter}} m</td></tr>`;
+        if (s.dsl_mtr) rows += `<tr><td class="label">DSL</td><td class="val">${{s.dsl_mtr}} m</td></tr>`;
+        if (s.latest_time) rows += `<tr><td class="label">As of</td><td class="val">${{s.latest_time}}</td></tr>`;
+      }} else {{
+        if (s.basin) rows += `<tr><td class="label">Basin</td><td class="val">${{s.basin}}</td></tr>`;
+        if (s.river) rows += `<tr><td class="label">River</td><td class="val">${{s.river}}</td></tr>`;
+        if (s.state) rows += `<tr><td class="label">State</td><td class="val">${{s.state}}</td></tr>`;
+        if (s.variable) rows += `<tr><td class="label">Variable</td><td class="val">${{s.variable}}</td></tr>`;
+        if (s.latest_value !== undefined && s.latest_value !== null) {{
+          rows += `<tr><td class="label">Latest (${{s.latest_time ? s.latest_time.slice(0,10) : ''}})</td><td class="val">${{s.latest_value}} ${{s.latest_unit || ''}}</td></tr>`;
+        }}
+        if (s.warning_level) rows += `<tr><td class="label">Warning Level</td><td class="val">${{s.warning_level}} m</td></tr>`;
+        if (s.danger_level) rows += `<tr><td class="label">Danger Level</td><td class="val">${{s.danger_level}} m</td></tr>`;
+        if (s.records) rows += `<tr><td class="label">Records</td><td class="val">${{s.records.toLocaleString()}}</td></tr>`;
       }}
-      if (s.warning_level) rows += `<tr><td class="label">Warning Level</td><td class="val">${{s.warning_level}} m</td></tr>`;
-      if (s.danger_level) rows += `<tr><td class="label">Danger Level</td><td class="val">${{s.danger_level}} m</td></tr>`;
-      if (s.records) rows += `<tr><td class="label">Records</td><td class="val">${{s.records.toLocaleString()}}</td></tr>`;
 
       const popupHtml = `
         <div class="custom-popup">
@@ -506,19 +590,23 @@ def create_map(
 
     // Add custom GeoJSON overlay layers
     customLayers.forEach(lyr => {{
+      const defaultStyle = {{
+        color: "#3b82f6",
+        weight: 2,
+        opacity: 0.7,
+        fillColor: "#60a5fa",
+        fillOpacity: 0.15
+      }};
+      const layerStyle = Object.assign({{}}, defaultStyle, lyr.style || {{}});
       const geoLayer = L.geoJSON(lyr.geojson, {{
-        style: {{
-          color: "#3b82f6",
-          weight: 2,
-          opacity: 0.7,
-          fillColor: "#60a5fa",
-          fillOpacity: 0.15
-        }},
+        style: layerStyle,
         onEachFeature: function(feature, layer) {{
           if (feature.properties) {{
-            let content = "<div style='font-size:12px;'><strong>Layer: " + lyr.name + "</strong><br/>";
+            let content = "<div style='font-size:12px; max-height:220px; overflow-y:auto;'><strong>Layer: " + lyr.name + "</strong><br/>";
             for (let k in feature.properties) {{
-              content += k + ": " + feature.properties[k] + "<br/>";
+              if (feature.properties[k] !== null && feature.properties[k] !== undefined) {{
+                content += "<b>" + k + "</b>: " + feature.properties[k] + "<br/>";
+              }}
             }}
             content += "</div>";
             layer.bindPopup(content);

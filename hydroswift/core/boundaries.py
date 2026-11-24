@@ -157,24 +157,89 @@ def get_basins_for_state(state: str) -> List[str]:
     return []
 
 
+STANDARD_VARIABLES: List[str] = [
+    "All Variables",
+    "Water level",
+    "Discharge",
+    "Rainfall",
+    "Groundwater level",
+    "Reservoir storage",
+    "Water quality",
+    "Custom...",
+]
+
+
+@lru_cache(maxsize=64)
+def get_basin_bounds(basin: Optional[str] = None) -> List[List[float]]:
+    """Calculate Leaflet bounding box [[min_lat, min_lon], [max_lat, max_lon]] for a river basin.
+
+    If basin is None, 'all', or unrecognized, returns India national bounding box:
+    [[6.5, 68.0], [37.5, 97.5]].
+    """
+    india_bounds = [[6.5, 68.0], [37.5, 97.5]]
+    if not basin or str(basin).strip().lower() in ("all", "any", "all basins", "all india"):
+        return india_bounds
+
+    gj = load_basin_geojson(basin)
+    features = gj.get("features", [])
+    if not features:
+        return india_bounds
+
+    def _extract_coords(geom):
+        coords = geom.get("coordinates", [])
+        def _flatten(c):
+            if not c:
+                return
+            if isinstance(c[0], (int, float)):
+                yield c
+            else:
+                for sub in c:
+                    yield from _flatten(sub)
+        return list(_flatten(coords))
+
+    pts = []
+    for f in features:
+        g = f.get("geometry")
+        if g:
+            pts.extend(_extract_coords(g))
+
+    if not pts:
+        return india_bounds
+
+    min_lon = min(p[0] for p in pts)
+    max_lon = max(p[0] for p in pts)
+    min_lat = min(p[1] for p in pts)
+    max_lat = max(p[1] for p in pts)
+    d_lat = max(0.05, (max_lat - min_lat) * 0.02)
+    d_lon = max(0.05, (max_lon - min_lon) * 0.02)
+    return [[min_lat - d_lat, min_lon - d_lon], [max_lat + d_lat, max_lon + d_lon]]
+
+
 @lru_cache(maxsize=1)
 def load_basin_geojson(basin: Optional[str] = None) -> dict:
     """Load bundled CWC basin GeoJSON FeatureCollection.
 
     If ``basin`` is specified, filters features to that basin.
     """
-    path = Path(__file__).parent.parent / "data" / "cwc_basins.geojson"
-    if not path.exists():
-        return {"type": "FeatureCollection", "features": []}
+    paths = [
+        Path(__file__).parent.parent / "data" / "cwc_basins.geojson",
+        Path("/run/media/carbform/Expansion/GW_Wris_may2024/Central Water Commission Basin.geojson"),
+    ]
+    data = None
+    for p in paths:
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                break
+            except Exception:
+                pass
 
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    if not data:
         return {"type": "FeatureCollection", "features": []}
 
     if not basin or basin.lower() in ("all", "any"):
         # Filter out features with no basin name
-        data["features"] = [f for f in data["features"] if f.get("properties", {}).get("Basin_Name") not in (None, "null")]
+        data["features"] = [f for f in data.get("features", []) if f.get("properties", {}).get("Basin_Name") not in (None, "null")]
         return data
 
     canon = canonical_basin(basin)
@@ -184,4 +249,51 @@ def load_basin_geojson(basin: Optional[str] = None) -> dict:
         if bname and (bname == canon or bname.lower() == str(basin).lower() or str(basin).lower() in bname.lower()):
             filtered.append(f)
 
+    return {"type": "FeatureCollection", "features": filtered}
+
+
+@lru_cache(maxsize=1)
+def load_india_boundary_geojson() -> dict:
+    """Load India national boundary GeoJSON FeatureCollection."""
+    paths = [
+        Path(__file__).parent.parent / "data" / "india_boundary.geojson",
+        Path("/run/media/carbform/Expansion/GW_Wris_may2024/india_boundary.geojson"),
+    ]
+    for p in paths:
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    return {"type": "FeatureCollection", "features": []}
+
+
+@lru_cache(maxsize=4)
+def load_aquifers_geojson(state: Optional[str] = None) -> dict:
+    """Load Major Aquifers GeoJSON FeatureCollection, optionally filtered by state."""
+    paths = [
+        Path(__file__).parent.parent / "data" / "major_aquifers.geojson",
+        Path("/run/media/carbform/Expansion/GW_Wris_may2024/Major Aquifers.geojson"),
+    ]
+    data = None
+    for p in paths:
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                break
+            except Exception:
+                pass
+
+    if not data:
+        return {"type": "FeatureCollection", "features": []}
+
+    if not state or state.lower() in ("all", "any"):
+        return data
+
+    s_lower = state.strip().lower()
+    filtered = []
+    for f in data.get("features", []):
+        st = str(f.get("properties", {}).get("state", "")).lower()
+        if s_lower in st or st in s_lower:
+            filtered.append(f)
     return {"type": "FeatureCollection", "features": filtered}

@@ -172,38 +172,79 @@ class CwcRsmsClient:
         results = []
         headers = {"Content-Type": "application/json", "User-Agent": "Mozilla/5.0 HydroSwift"}
 
-        for idx, f in enumerate(features, 1):
+        # Quick canary probe to test if RSMS details endpoint is healthy (e.g. not 502/down)
+        details_available = False
+        if features:
+            try:
+                canary_uid = features[0].get("properties", {}).get("reservoir_unique_id", "D02694")
+                canary_payload = json.dumps({"reservoir_uid": canary_uid}).encode("utf-8")
+                canary_req = urllib.request.Request(RSMS_DETAILS_API, data=canary_payload, headers=headers)
+                with urllib.request.urlopen(canary_req, context=_SSL_CTX, timeout=3) as c_resp:
+                    if c_resp.status == 200:
+                        details_available = True
+            except Exception:
+                details_available = False
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _fetch_one(f):
             props = f.get("properties", {})
             uid = props.get("reservoir_unique_id")
             name = props.get("reservoir_name")
             if not uid:
-                continue
+                return None
 
-            payload = json.dumps({"reservoir_uid": uid}).encode("utf-8")
-            req2 = urllib.request.Request(RSMS_DETAILS_API, data=payload, headers=headers)
-            try:
-                with urllib.request.urlopen(req2, context=_SSL_CTX, timeout=timeout) as resp2:
-                    res = json.loads(resp2.read().decode())
-                    items = res.get("result", [])
-                    if items:
-                        item = items[0]
-                        results.append(
-                            {
-                                "reservoir_unique_id": uid,
-                                "reservoir_name": item.get("reservoir_name") or name,
-                                "entry_date": item.get("entry_date"),
-                                "storage_bcm": float(item.get("storage_bcm", 0.0) or 0.0),
-                                "live_cap_bcm": float(item.get("live_cap_bcm", 0.0) or 0.0),
-                                "gross_cap_bcm": float(item.get("gross_cap_bcm", 0.0) or 0.0),
-                                "cap_dsl_bcm": float(item.get("cap_dsl_bcm", 0.0) or 0.0),
-                                "frl_meter": props.get("frl_meter"),
-                                "dsl_mtr": props.get("dsl_mtr"),
-                                "latitude": props.get("lattitude"),
-                                "longitude": props.get("longitude"),
-                            }
-                        )
-            except Exception as e:
-                logger.debug("Failed fetching details for %s (%s): %s", uid, name, e)
+            lat = props.get("lattitude")
+            lon = props.get("longitude")
+            live_cap = float(props.get("live_cap_bcm") or 0.0)
+            gross_cap = float(props.get("gross_cap_bcm") or 0.0)
+            frl = props.get("frl_meter")
+            dsl = props.get("dsl_mtr")
+
+            storage_bcm = None
+            entry_date = datetime.now().strftime("%Y-%m-%d")
+
+            if details_available:
+                payload = json.dumps({"reservoir_uid": uid}).encode("utf-8")
+                req2 = urllib.request.Request(RSMS_DETAILS_API, data=payload, headers=headers)
+                try:
+                    with urllib.request.urlopen(req2, context=_SSL_CTX, timeout=min(timeout, 5)) as resp2:
+                        res = json.loads(resp2.read().decode())
+                        items = res.get("result", [])
+                        if items:
+                            item = items[0]
+                            val = item.get("storage_bcm")
+                            if val is not None:
+                                storage_bcm = float(val)
+                            if item.get("entry_date"):
+                                entry_date = str(item["entry_date"])
+                            if item.get("live_cap_bcm"):
+                                live_cap = float(item["live_cap_bcm"])
+                            if item.get("gross_cap_bcm"):
+                                gross_cap = float(item["gross_cap_bcm"])
+                except Exception as e:
+                    logger.debug("Failed fetching details for %s (%s): %s", uid, name, e)
+
+            return {
+                "reservoir_unique_id": uid,
+                "reservoir_name": name,
+                "entry_date": entry_date,
+                "storage_bcm": storage_bcm,
+                "live_cap_bcm": live_cap,
+                "gross_cap_bcm": gross_cap,
+                "cap_dsl_bcm": float(props.get("cap_dsl_bcm") or 0.0),
+                "frl_meter": frl,
+                "dsl_mtr": dsl,
+                "latitude": float(lat) if lat is not None else None,
+                "longitude": float(lon) if lon is not None else None,
+            }
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_feat = {executor.submit(_fetch_one, f): f for f in features}
+            for fut in as_completed(future_to_feat):
+                res_item = fut.result()
+                if res_item:
+                    results.append(res_item)
 
         df_new = pd.DataFrame(results)
         Console.success(f"Successfully retrieved daily records for {len(df_new)} reservoirs.")
