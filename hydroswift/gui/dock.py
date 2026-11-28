@@ -22,11 +22,11 @@ _DOCK = '.stApp div[data-testid="stVerticalBlock"]:has(> .element-container .hs-
 
 
 def _style(minimised: bool) -> str:
-    room = "5rem" if minimised else "27rem"
+    room, room_short = ("4rem", "4rem") if minimised else ("22rem", "16rem")
     return f"""<style>
 {_DOCK} {{
   position: fixed; right: 1rem; bottom: 0; z-index: 999990;
-  width: min(60rem, calc(100vw - 24rem)) !important; max-height: 70vh; overflow: auto;
+  width: min(56rem, calc(100vw - 2rem)) !important; max-height: 70vh; overflow: auto;
   background: #0b1220; border: 1.5px solid #334155; border-bottom: 0; border-radius: 8px 8px 0 0;
   box-shadow: 0 -6px 24px rgba(0,0,0,.28); padding: .55rem .8rem .7rem; gap: .45rem; }}
 {_DOCK} p, {_DOCK} span, {_DOCK} label, {_DOCK} div[data-testid="stWidgetLabel"] p {{ color: #cbd5e1 !important; }}
@@ -56,7 +56,7 @@ def _style(minimised: bool) -> str:
   color: #e2e8f0; }}
 .hs-dock-title i {{ color: #4ade80; font-style: normal; }}
 .block-container {{ padding-bottom: {room} !important; }}
-@media (max-height: 750px) {{ .hs-term {{ height: 9rem; }} .block-container {{ padding-bottom: 20rem !important; }} }}
+@media (max-height: 750px) {{ .hs-term {{ height: 9rem; }} .block-container {{ padding-bottom: {room_short} !important; }} }}
 @media (max-width: 900px) {{
   {_DOCK} {{ right: 0; width: 100vw !important; max-height: 60vh; }}
   .hs-term {{ height: 10rem; }} }}

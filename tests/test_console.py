@@ -36,9 +36,9 @@ def test_search_updates_results_and_sidebar():
     term, state, calls = _make(selected={("CWC", "a")})
     out = term.run("hyswift search discharge --basin cauvery --source CWC --period 2023:2024")
     assert "4 rows" in out and calls["search"][2]["basin"] == "cauvery"
-    assert state["main_view"] == "Select Stations" and state["selected"] == set()
+    assert state["main_view"] == console.VIEW_FIND and state["selected"] == set()
     assert (state["sb_basin"], state["sb_variable"], state["boundary_mode"]) == (
-        "Cauvery", "Discharge", "Hydrological (Basin)")
+        "Cauvery", "Discharge", "River basin")
     assert (state["src_cwc"], state["src_wris"], state["sb_start"], state["sb_end"]) == (True, False, 2023, 2024)
     assert state["console_history"][-1][0].startswith("hyswift search")
 
@@ -84,7 +84,7 @@ def test_help_bad_arguments_and_bad_rows_are_messages():
 def test_plot_and_stats_switch_the_view(tmp_path):
     term, state, _ = _make(tidy=_tidy())
     assert "Flow duration curve" in term.run("plot kudlur --kind fdc")
-    assert state["main_view"] == "Visualize" and state["viz_station"].startswith("Kudlur")
+    assert state["main_view"] == console.VIEW_ANALYSE and state["viz_station"].startswith("Kudlur")
     assert "no loaded station matches" in term.run("plot nowhere")
     out = term.run(f"stats --out {tmp_path / 's.csv'}")
     assert "completeness_pct_of_record" in out and (tmp_path / "s.csv").exists()

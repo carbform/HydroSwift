@@ -21,6 +21,8 @@ from hydroswift.gui.model import pick_rows, row_keys
 from hydroswift.gui.plotdata import station_options
 
 HISTORY_LIMIT = 50
+VIEW_FIND, VIEW_ANALYSE, VIEW_RESERVOIRS = "Find & download", "Analyse", "Reservoirs"
+VIEWS = [VIEW_FIND, VIEW_ANALYSE, VIEW_RESERVOIRS]
 LOCAL_ADDRESSES = ("localhost", "127.0.0.1", "::1")
 PLOT_KINDS = {"timeseries": "Time series", "hydrograph": "Time series", "hyetograph": "Rainfall",
               "rating_curve": "Rating curve", "compare": "Compare stations", "fdc": "Flow duration curve",
@@ -132,8 +134,7 @@ class Console:
         catalog = self._search(parsed.query, parsed.location, sources=parsed.sources, period=parsed.period,
                                ids=ids, basin=parsed.basin, state=parsed.state)
         self.state.update(catalog=catalog, selected=set(), editor_base=None, run=None, tidy=None,
-                          last_download=None, estimate=None, active_view="Hydrology Data",
-                          main_view="Select Stations")
+                          last_download=None, estimate=None, main_view=VIEW_FIND)
         self._sync_sidebar(parsed)
         buffer = io.StringIO()
         with redirect_stdout(buffer):
@@ -150,11 +151,11 @@ class Console:
         region = next((s for s in INDIAN_STATES if parsed.state and s.lower() == parsed.state.lower()), None)
         state.update(active_basin=None, active_state=None)
         if basin in INDIAN_BASINS:
-            state.update(boundary_mode="Hydrological (Basin)", sb_basin=basin, active_basin=basin)
+            state.update(boundary_mode="River basin", sb_basin=basin, active_basin=basin)
         elif region:
-            state.update(boundary_mode="Administrative (State)", sb_state=region, active_state=region)
+            state.update(boundary_mode="State / UT", sb_state=region, active_state=region)
         else:
-            state.update(boundary_mode="All / Custom", sb_custom=parsed.location or "")
+            state.update(boundary_mode="Keyword", sb_custom=parsed.location or "")
         if parsed.query:
             known = next((v for v in VARIABLE_CHOICES if v.lower() == parsed.query.lower()), None)
             state["sb_variable"] = known or "Custom..."
@@ -193,7 +194,7 @@ class Console:
             return "selection cleared"
         keys = row_keys(catalog)
         self._select({keys[i] for i in self._rows(spec, len(catalog))})
-        self.state["main_view"] = "Select Stations"
+        self.state["main_view"] = VIEW_FIND
         return f"{len(self.state['selected'])} selected"
 
     def do_get(self, args):
@@ -238,7 +239,7 @@ class Console:
         a = self._parse(parser, args)
         tidy = self._tidy()
         table = analysis.resample(tidy, a.freq) if a.freq else analysis.summary(tidy)
-        self.state["main_view"] = "Visualize"
+        self.state["main_view"] = VIEW_ANALYSE
         if not a.freq:
             self.state["viz_kind"] = "Summary & data quality"
         saved = ""
@@ -260,7 +261,7 @@ class Console:
         matches = [o for o in options if all(w in o.lower() for w in words)]
         if not matches:
             raise CommandError("no loaded station matches; loaded: " + "; ".join(options))
-        self.state.update(main_view="Visualize", viz_kind=PLOT_KINDS[a.kind], active_view="Hydrology Data")
+        self.state.update(main_view=VIEW_ANALYSE, viz_kind=PLOT_KINDS[a.kind])
         if words:
             self.state["viz_station"] = matches[0]
         note = f" ({len(matches)} matched; showing the first)" if words and len(matches) > 1 else ""
@@ -277,7 +278,7 @@ class Console:
         parser = self._parser("rsms")
         parser.add_argument("what", choices=["daily"])
         self._parse(parser, args)
-        self.state.update(active_view="Reservoir Status", rsms_daily=None, rsms_fetch=True)
+        self.state.update(main_view=VIEW_RESERVOIRS, rsms_daily=None, rsms_fetch=True)
         return "fetching reservoir status; see the page"
 
 

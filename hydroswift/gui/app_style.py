@@ -38,7 +38,7 @@ def get_credits_html(dark: bool = False) -> str:
         f'<div class="credits"><b>HydroSwift</b> {__version__} &nbsp;·&nbsp; '
         + link.format("https://github.com/carbform/HydroSwift", "GitHub") + " &nbsp;·&nbsp; "
         + link.format("https://hydroswift.readthedocs.io", "Docs") + " &nbsp;·&nbsp; "
-        + "Independent tool, not an official CWC product. See About.</div>"
+        + "Independent tool, not an official CWC product. See Menu → About.</div>"
     )
 
 
@@ -90,16 +90,18 @@ html, body, .stApp, [class*="st-"], button, input, textarea, select {{
 .stApp, .stApp p, .stApp span, .stApp li, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5,
 .stApp [data-testid="stMarkdownContainer"], .stApp [data-testid="stWidgetLabel"] p {{ color: {c['ink']}; }}
 
-/* Streamlit Header pass-through so clicks never get intercepted */
-header[data-testid="stHeader"] {{
-  background: transparent !important;
-  pointer-events: none !important;
-  height: 2.2rem !important;
-  min-height: 0 !important; }}
-header[data-testid="stHeader"] [data-testid="stToolbar"] {{
-  pointer-events: auto !important; }}
+/* The page has its own Menu; Streamlit's toolbar would sit on top of it */
+header[data-testid="stHeader"] {{ display: none; }}
 
-.block-container {{ padding-top: 1.8rem !important; padding-bottom: 2.5rem; max-width: 1560px; }}
+.block-container {{ padding-top: 1.1rem !important; padding-bottom: 1rem; max-width: 1560px; }}
+[data-testid="stVerticalBlock"] {{ gap: .6rem; }}
+.element-container:has(.hs-keep) {{ display: none; }}
+[data-testid="stSidebar"], [data-testid="collapsedControl"] {{ display: none; }}
+.stApp .brand {{ font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; line-height: {CONTROL_H}; }}
+.stApp .brand span {{ color: {c['accent']} !important; }}
+.stApp .field-label {{ font-size: .82rem; color: {c['muted']}; line-height: 1.5rem; margin-bottom: .2rem; }}
+.stApp .panel-title {{ font-size: .85rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  color: {c['muted']}; line-height: {CONTROL_H}; }}
 
 h1 {{
   display: flex !important;
@@ -133,6 +135,31 @@ div[data-testid="stRadio"] div[role="radiogroup"] {{ flex-wrap: wrap; }}
 @media (min-width: 641px) and (max-width: 1200px) {{
   div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; }}
   div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ min-width: 10rem !important; }} }}
+.element-container:has(.hs-row-mark) {{ display: none; }}
+/* the top bar and the search fields stay on one line down to small windows */
+@media (min-width: 801px) and (max-width: 1200px) {{
+  div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"] .element-container .hs-row),
+  div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"] .element-container .hs-row-mark) {{
+    flex-wrap: nowrap !important; gap: .5rem; }}
+  div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"] .element-container .hs-row)
+    > div[data-testid="column"],
+  div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"] .element-container .hs-row-mark)
+    > div[data-testid="column"] {{ min-width: 0 !important; }}
+  .stNumberInput button {{ display: none; }}
+  .stApp div[data-testid="stRadio"] div[role="radiogroup"] {{ gap: .3rem; flex-wrap: nowrap; }}
+  .stApp div[data-testid="stRadio"] div[role="radiogroup"] > label {{ padding: .25rem .35rem; margin: 0; }}
+  .stApp div[data-testid="stRadio"] label p {{ font-size: .76rem !important; }}
+  [data-testid="stToggle"] p, [data-testid="stToggle"] label {{ white-space: nowrap; font-size: .76rem !important; }}
+  .stApp div[data-baseweb="select"] * {{ font-size: .78rem !important; }}
+  .stApp div[data-baseweb="select"] > div > div {{ padding-left: .35rem; padding-right: 0; }}
+  .brand {{ font-size: 1.15rem !important; }}
+  .stButton button, [data-testid="stPopover"] button {{ padding-left: .3rem; padding-right: .3rem; }}
+  .stButton button p, [data-testid="stPopover"] button p {{ font-size: .76rem !important; }} }}
+
+/* the table and the map share a row only when there is room for both */
+@media (max-width: 1100px) {{
+  div[data-testid="stHorizontalBlock"]:has(> div[data-testid="column"] .element-container .hs-workspace)
+    > div[data-testid="column"] {{ min-width: 100% !important; flex: 1 1 100% !important; }} }}
 @media (max-width: 640px) {{
   div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
     min-width: 100% !important; flex: 1 1 100% !important; }}
@@ -216,7 +243,8 @@ div[data-baseweb="input"]:focus-within, div[data-baseweb="textarea"]:focus-withi
 [data-testid="stDataFrame"] {{ border: 1.5px solid {c['line']}; border-radius: 4px; box-shadow: 2px 2px 0px {c['shadow']}; overflow: hidden; }}
 
 /* Alerts & Boxes */
-[data-testid="stAlert"] {{ border-radius: 4px; font-size: 0.84rem; padding: 0.6rem 0.9rem; background: {c['info']}; border: 1.5px solid {c['line']}; box-shadow: 2px 2px 0px {c['shadow']}; }}
+[data-testid="stAlert"] > div {{ padding: .5rem .8rem; }}
+[data-testid="stAlert"] {{ border-radius: 4px; font-size: 0.84rem; padding: 0; background: {c['info']}; border: 1.5px solid {c['line']}; box-shadow: 2px 2px 0px {c['shadow']}; }}
 [data-testid="stAlert"] * {{ color: {c['ink']} !important; }}
 [data-testid="stExpander"] {{ border: 1.5px solid {c['line']}; border-radius: 4px; background: {c['paper']}; margin-bottom: 0.5rem; box-shadow: 2px 2px 0px {c['shadow']}; }}
 
@@ -229,7 +257,7 @@ button[data-baseweb="tab"][aria-selected="true"] {{
 
 /* Credits Footer */
 .credits {{
-  margin-top: 2.2rem; padding: 0.85rem 0 0.4rem; border-top: 1.5px solid {c['line']};
+  margin-top: .8rem; padding: 0.5rem 0 0.2rem; border-top: 1.5px solid {c['line']};
   text-align: center; font-size: 0.8rem; letter-spacing: 0.06em; color: {c['muted']}; }}
 .credits a {{ color: {c['accent']} !important; text-decoration: none; border-bottom: 1px solid transparent; }}
 .credits a:hover {{ border-bottom-color: {c['accent']}; }}

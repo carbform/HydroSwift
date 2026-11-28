@@ -71,10 +71,19 @@ from hydroswift.core.boundaries import (
     load_india_boundary_geojson,
 )
 from hydroswift.core.mapping import SOURCE_COLORS, create_map
-from hydroswift.gui.app_style import CREDITS, get_credits_html, sidebar_brand, stylesheet
+from hydroswift.gui.app_style import get_credits_html, stylesheet
 from hydroswift.gui.desktop import choose_folder
 from hydroswift.gui import dock
-from hydroswift.gui.console import Console, record, row_spec, search_command
+from hydroswift.gui.console import (
+    VIEW_ANALYSE,
+    VIEW_FIND,
+    VIEW_RESERVOIRS,
+    VIEWS,
+    Console,
+    record,
+    row_spec,
+    search_command,
+)
 from hydroswift.gui.jobs import DownloadJob
 from hydroswift.gui.model import (
     REVIEW_COLUMNS,
@@ -91,8 +100,12 @@ from hydroswift.gui.model import (
 from hydroswift.gui.plotdata import export_tidy
 
 
+TABLE_HEIGHT = 300
+MAP_HEIGHT = 420
+
 # widget values that must survive runs which do not draw the widget
-KEEP_KEYS = ("main_view", "filter_text", "advanced", "boundary_mode", "sb_basin", "sb_state", "sb_custom",
+KEEP_KEYS = ("main_view", "filter_text", "advanced", "export_format", "dest_input",
+             "layer_india", "layer_basins", "layer_aquifers", "boundary_mode", "sb_basin", "sb_state", "sb_custom",
              "sb_variable", "sb_custom_var", "sb_start", "sb_end", "src_cwc", "src_wris", "src_nwdp")
 
 
@@ -112,8 +125,12 @@ def init_session():
         "active_state": None,
         "download_dir": "output",
         "rsms_daily": None,
-        "active_view": "Hydrology Data",
-        "boundary_mode": "Hydrological (Basin)",
+        "main_view": VIEW_FIND,
+        "layer_india": True,
+        "layer_basins": True,
+        "layer_aquifers": False,
+        "export_format": "csv",
+        "boundary_mode": "River basin",
         "console_history": [],
         "sb_basin": "All Basins",
         "sb_state": "All States",
@@ -265,7 +282,7 @@ def finish_download(job) -> None:
         return
     if tidy.empty and st.session_state.get("tidy") is not None and not st.session_state["tidy"].empty:
         # a cancelled or empty download must not take away data already on screen
-        report["messages"].append(("info", "This download added no data; Visualize still shows the earlier one."))
+        report["messages"].append(("info", "This download added no data; Analyse still shows the earlier one."))
         return
     st.session_state["tidy"] = tidy
     st.session_state["tidy_period"] = job.period
@@ -284,59 +301,62 @@ def finish_download(job) -> None:
         report["messages"].append(("error", f"Could not write the {job.export_format} file (CSV files were saved): {e}"))
 
 
-def render_job(job) -> None:
+def draw_progress(slot, job) -> None:
     snap = job.snapshot()
-    st.progress(min(1.0, snap["done"] / max(snap["total"], 1)),
-                text=f"{snap['done']} of {snap['total']} items finished · {snap['seconds']} s · {snap['latest']}")
-    for line in snap["pages"][:4]:
-        st.caption(line)
-    if job.cancelling:
-        st.info("Cancelling. Items already being downloaded may finish first.")
-    else:
-        st.button("Cancel download", on_click=job.cancel)
+    reading = " · ".join(snap["pages"][:2]) or snap["latest"]
+    stopping = "Cancelling, items in progress may finish first · " if job.cancelling else ""
+    slot.progress(min(1.0, snap["done"] / max(snap["total"], 1)),
+                  text=f"{stopping}{snap['done']} of {snap['total']} finished · {snap['seconds']} s · {reading}")
+
+
+def render_job(job):
+    """One row: progress and Cancel. Returns the placeholder to keep updating."""
+    bar, stop = st.columns([8, 2])
+    slot = bar.empty()
+    draw_progress(slot, job)
+    stop.button("Cancel download", on_click=job.cancel, disabled=job.cancelling, use_container_width=True)
+    return slot
+
+
+def follow(job, slot) -> None:
+    """Update progress in place until the job ends, then draw the page with its results.
+
+    The page is not redrawn meanwhile, so nothing jumps; any click simply starts a new run.
+    """
+    while job.running:
+        draw_progress(slot, job)
+        time.sleep(0.7)
+    st.rerun()
 
 
 def render_last_download(report) -> None:
+    """One compact block, so the table below it hardly moves."""
+    message_col, open_col, retry_col, details_col = st.columns([5, 2, 1.5, 1.5])
     for level, text in report["messages"]:
-        getattr(st, level)(text)
+        getattr(message_col, level)(text)
     problems = report["problems"]
-    if problems is not None:
+    tidy = st.session_state.get("tidy")
+    if tidy is not None and not tidy.empty and st.session_state.get("main_view") != VIEW_ANALYSE:
+        open_col.button("Open in Analyse →", type="primary", use_container_width=True,
+                        on_click=lambda: st.session_state.update(main_view=VIEW_ANALYSE))
+    if problems is None:
+        return
+
+    def retry():
+        keys = set(zip(problems["source"].astype(str), problems["id"].astype(str)))
+        start_download(pick_rows(report["table"], keys), period=report["period"],
+                       output_dir=report["output_dir"], export_format=report["export_format"],
+                       previous=report["run"])
+        # keep the full request so a second retry can still find every row
+        st.session_state["job"].full_table = report["table"]
+
+    retry_col.button(f"Retry ({len(problems)})", on_click=retry, use_container_width=True,
+                     help="Download the failed or incomplete items again.")
+    with details_col.popover("Details", use_container_width=True):
         st.dataframe(problems[["source", "title", "status", "error"]], use_container_width=True, hide_index=True)
-        def retry():
-            keys = set(zip(problems["source"].astype(str), problems["id"].astype(str)))
-            start_download(pick_rows(report["table"], keys), period=report["period"],
-                           output_dir=report["output_dir"], export_format=report["export_format"],
-                           previous=report["run"])
-            # keep the full request so a second retry can still find every row
-            st.session_state["job"].full_table = report["table"]
-
-        st.button(f"Retry {len(problems)} failed or incomplete", on_click=retry)
 
 
-def render_source_status(cat: pd.DataFrame, advanced: bool) -> None:
-    lines = source_status_lines(cat)
-    icons = {"ok": "✓", "partial": "!", "failed": "✗"}
-    st.markdown(" ".join(f'<span class="metric-pill">{icons[x["level"]]} {x["text"]}</span>' for x in lines),
-                unsafe_allow_html=True)
-    if any(x["level"] != "ok" for x in lines):
-        where = "the Source log below" if advanced else "Advanced mode (Source log)"
-        st.warning("Some sources failed or returned only part of their listing, so these results are "
-                   f"incomplete. Details are in {where}.")
-
-
-def render_selection(cat: pd.DataFrame) -> None:
-    """Checkbox table. Only the ticked (Source, ID) keys are read back from it."""
-    f1, f2 = st.columns([3, 2])
-    words = f1.text_input("Filter", placeholder="Words in title, place or variable", key="filter_text")
-    source_names = sorted(cat["Source"].unique())
-    sources_key = f"filter_sources_{'_'.join(source_names)}"
-    if sources_key not in st.session_state:  # not default=: the value is also restored from state
-        st.session_state[sources_key] = source_names
-    wanted = f2.multiselect("Sources shown", source_names, key=sources_key)
-    shown = cat[text_filter(cat, words) & cat["Source"].isin(wanted)]
-    keys = row_keys(shown)
-    selected = st.session_state["selected"]
-
+def _bulk_buttons(shown: pd.DataFrame, keys: list, selected: set) -> None:
     def choose(new_selection):
         st.session_state["selected"], st.session_state["editor_base"] = new_selection, None
 
@@ -347,8 +367,26 @@ def render_selection(cat: pd.DataFrame) -> None:
               on_click=choose, args=(selected - set(keys),))
     # never disabled: this row is drawn before the ticks of this run are read
     b3.button("Clear selection", use_container_width=True, on_click=choose, args=(set(),))
+
+
+def render_selection(cat: pd.DataFrame) -> None:
+    """Checkbox table. Only the ticked (Source, ID) keys are read back from it."""
+    f1, f2 = st.columns([2, 3])
+    words = f1.text_input("Filter", placeholder="Words in title, place or variable", key="filter_text")
+    source_names = sorted(cat["Source"].unique())
+    sources_key = f"filter_sources_{'_'.join(source_names)}"
+    if sources_key not in st.session_state:  # not default=: the value is also restored from state
+        st.session_state[sources_key] = source_names
+    wanted = f2.multiselect("Sources shown", source_names, key=sources_key)
+    shown = cat[text_filter(cat, words) & cat["Source"].isin(wanted)]
+    keys = row_keys(shown)
+    selected = st.session_state["selected"]
+
+    table_slot, bulk_slot = st.container(), st.container()
+    with bulk_slot:
+        _bulk_buttons(shown, keys, selected)
     if shown.empty:
-        st.info("No rows match this filter.")
+        table_slot.info("No rows match this filter.")
         return
 
     # The editor's input stays fixed between ticks; it is rebuilt (new key) only when rows change.
@@ -361,72 +399,45 @@ def render_selection(cat: pd.DataFrame) -> None:
     columns = [(c, h) for c, h in REVIEW_COLUMNS if c != "EstRecords"]
     view = pd.DataFrame({header: [review_value(shown, i, col) for i in shown.index] for col, header in columns})
     view.insert(0, "Select", base["ticked"])
-    edited = st.data_editor(view, key=f"editor_{st.session_state['editor_version']}", hide_index=True,
-                            disabled=[h for _, h in columns], use_container_width=True, height=420,
+    edited = table_slot.data_editor(view, key=f"editor_{st.session_state['editor_version']}", hide_index=True,
+                            disabled=[h for _, h in columns], use_container_width=True, height=TABLE_HEIGHT,
                             column_config={"Select": st.column_config.CheckboxColumn("Select", width="small")})
     ticked = {k for k, on in zip(keys, edited["Select"]) if on}
     st.session_state["selected"] = (selected - set(keys)) | ticked
 
 
-def main():
-    st.set_page_config(
-        page_title="HydroSwift · Hydrological Studio",
-        layout="wide",
-        initial_sidebar_state="auto",
-    )
-    init_session()
-    # Streamlit forgets a widget's value on any run that does not draw it (another view, or a
-    # download in progress). Re-assigning keeps these.
-    for key in list(st.session_state):
-        if key in KEEP_KEYS + dock.STATE_KEYS or str(key).startswith(("filter_sources_", "viz_")):
-            st.session_state[key] = st.session_state[key]
+def keep_slot() -> None:
+    """Invisible content for a block that may otherwise stay empty.
 
-    # Dark mode toggle state
-    if "dark" not in st.session_state:
-        st.session_state["dark"] = False
+    Streamlit 1.32's page drops empty blocks after a run, so later blocks shift by one on
+    the next run: a ghost copy of the page, and once a blank screen.
+    """
+    st.markdown('<span class="hs-keep"></span>', unsafe_allow_html=True)
 
-    # Top Header Bar: Brand + View Switcher + Help + About + Dark Mode Toggle
-    head_col, help_col, about_col, dark_col, mode_col = st.columns([4.6, 1.2, 1.3, 1.8, 1.8])
-    with head_col:
-        st.markdown(
-            '<div style="font-size: 1.55rem; font-weight: 700; letter-spacing: -0.02em; padding-top: 0.15rem;">'
-            '<span>Hydro</span><span style="color: #2563eb;">Swift</span>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
 
-        # Module Switcher: Hydrology Data vs. Reservoir Status
-        view_modes = ["Hydrology Data", "Reservoir Status"]
-        if st.session_state.get("active_view") not in view_modes:
-            st.session_state["active_view"] = "Hydrology Data"
-
-        active_view_choice = st.radio(
-            "Module Switcher",
-            view_modes,
-            key="active_view",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
-        is_rsms = (active_view_choice == "Reservoir Status")
-
-    with help_col:
-        with st.popover("Help", use_container_width=True):
-            st.markdown("### Quick Guide & Help")
+def render_topbar():
+    """Brand, the three views, the Advanced switch and one menu, in a single row."""
+    brand, nav, mode, menu = st.columns([1.6, 5.9, 2, 1.3])
+    brand.markdown('<div class="brand hs-row">Hydro<span>Swift</span></div>', unsafe_allow_html=True)
+    if st.session_state.get("main_view") not in VIEWS:
+        st.session_state["main_view"] = VIEW_FIND
+    view = nav.radio("View", VIEWS, key="main_view", horizontal=True, label_visibility="collapsed")
+    advanced = mode.toggle("Advanced", key="advanced", help="Command console and source log, docked at the bottom.")
+    with menu.popover("Menu", use_container_width=True):
+        dark = st.toggle("Dark mode", key="dark")
+        with st.expander("Help"):
             st.markdown(
-                "1. **Boundary & Scope**: Choose **River Basin** (Hydrological) or **State** (Administrative) in the sidebar. Queries automatically cross-discover constituent observations.\n"
-                "2. **Physical Variable**: Filter by Water Level, Discharge, Rainfall, Groundwater, or all parameters.\n"
-                "3. **Search & Discover**: Queries live telemetry and archive records across CWC, WRIS, and NWDP.\n"
-                "4. **Select**: Tick stations in the **Select Stations** view.\n"
-                "5. **Download**: Pick your local folder and download selected stations as CSV. Choosing Parquet, GeoPackage or JSON also writes one combined file in that format.\n"
-                "6. **Visualize**: time series with aggregation, data quality, station comparison, monthly pattern, warning/danger exceedance, flow duration, rating curve, rainfall and groundwater.\n"
-                "7. **Reservoir Status**: Switch to the dedicated top tab for live storage monitoring across ~180 major national reservoirs.\n"
-                "8. **Advanced**: a terminal panel at the bottom with a `hyswift` command console and the source log."
+                "1. **Search**: choose a river basin, state or keyword, a variable and years, then press **Search**.\n"
+                "2. **Select**: tick stations in the table; the map beside it shows where they are.\n"
+                "3. **Download**: press **Download** above the table. **Options** sets format, folder and size estimate.\n"
+                "4. **Analyse**: time series, data quality, comparison, monthly pattern, warning/danger exceedance, "
+                "flow duration, rating curve, rainfall and groundwater.\n"
+                "5. **Reservoirs**: live storage for the major CWC-monitored reservoirs.\n"
+                "6. **Advanced**: a terminal panel at the bottom with a `hyswift` command console and the source log."
             )
             st.caption("CLI command: `hyswift --help` · Documentation: [GitHub](https://github.com/carbform/HydroSwift)")
 
-    with about_col:
-        with st.popover("About", use_container_width=True):
-            st.markdown("### About HydroSwift")
+        with st.expander("About and disclaimer"):
             st.markdown(
                 "**HydroSwift** is an open-source hydrological data engine and visualization studio for Indian water resources.\n\n"
                 "**Authors & Credits**:\n"
@@ -444,12 +455,285 @@ def main():
                 "Data retrieved via public endpoints is provided 'as is'. Always refer to official government bulletins for statutory flood warnings."
             )
 
-    with dark_col:
-        dark = st.toggle("Dark mode", key="dark")
-    with mode_col:
-        advanced = st.toggle("Advanced", key="advanced",
-                             help="Command console and source log, docked at the bottom.")
+    return view, advanced, dark
 
+
+def render_search_bar():
+    """Where, what and when in one row. Returns the period and whether it is invalid."""
+    job = st.session_state.get("job")
+    modes = ["River basin", "State / UT", "Keyword"]
+    if st.session_state.get("boundary_mode") not in modes:
+        st.session_state["boundary_mode"] = modes[0]
+
+    c_mode, c_place, c_var, c_from, c_to, c_src, c_go = st.columns([1.9, 2.1, 1.9, 1, 1, 1.4, 1.5])
+    with c_mode:
+        st.markdown('<span class="hs-row-mark"></span>', unsafe_allow_html=True)
+        boundary_mode = st.selectbox("Search by", modes, key="boundary_mode")
+
+    selected_basin = selected_state = custom_loc = None
+    with c_place:
+        if boundary_mode == modes[0]:
+            related = get_states_for_basin(st.session_state.get("sb_basin") or "")
+            selected_basin = st.selectbox(
+                "River Basin", ["All Basins"] + INDIAN_BASINS, key="sb_basin",
+                help=f"States in this basin: {', '.join(related)}" if related else
+                "Basin searches also find the NWDP datasets of the states in the basin.")
+            st.session_state["active_basin"] = None if selected_basin == "All Basins" else selected_basin
+        elif boundary_mode == modes[1]:
+            related = get_basins_for_state(st.session_state.get("sb_state") or "")
+            selected_state = st.selectbox(
+                "State / Union Territory", ["All States"] + INDIAN_STATES, key="sb_state",
+                help=f"Basins in this state: {', '.join(related)}" if related else None)
+            st.session_state["active_state"] = None if selected_state == "All States" else selected_state
+        else:
+            custom_loc = st.text_input("Location keyword", key="sb_custom", placeholder="e.g. Bangalore, Ganga")
+
+    with c_var:
+        var_choice = st.selectbox("Variable", STANDARD_VARIABLES, key="sb_variable")
+        if var_choice == "Custom...":
+            query_var = st.text_input("Variable keyword", key="sb_custom_var", placeholder="e.g. sediment")
+        else:
+            query_var = "" if var_choice == "All Variables" else var_choice
+
+    this_year = date.today().year
+    start_year = c_from.number_input("From", min_value=1900, max_value=this_year, step=1, key="sb_start")
+    end_year = c_to.number_input("To", min_value=1900, max_value=this_year, step=1, key="sb_end")
+    period = (str(int(start_year)), str(int(end_year)))
+    bad_period = start_year > end_year
+
+    with c_src:
+        st.markdown('<div class="field-label">Sources</div>', unsafe_allow_html=True)
+        on = sum(bool(st.session_state.get(k)) for k in ("src_cwc", "src_wris", "src_nwdp"))
+        with st.popover(f"{on} of 3", use_container_width=True):
+            st.checkbox("CWC Flood Forecasting (FFS)", key="src_cwc", help="Telemetry stage and rating-curve discharge")
+            st.checkbox("India-WRIS OpenAPI 3.0", key="src_wris", help="Official India-WRIS REST API")
+            st.checkbox("NWDP Open Data", key="src_nwdp", help="Rainfall, groundwater and other open datasets")
+    sources = [name for name, key in (("CWC", "src_cwc"), ("WRIS", "src_wris"), ("NWDP", "src_nwdp"))
+               if st.session_state.get(key)]
+
+    with c_go:
+        st.markdown('<div class="field-label">&nbsp;</div>', unsafe_allow_html=True)
+        clicked = st.button("Search", type="primary", use_container_width=True,
+                            disabled=bad_period or job is not None)
+    message = st.container()
+    with message:
+        keep_slot()
+    if bad_period:
+        message.error("The From year is after the To year.")
+    if clicked and not sources:
+        message.error("Turn on at least one data source.")
+    elif clicked:
+        b_filter = selected_basin if selected_basin and selected_basin != "All Basins" else None
+        s_filter = selected_state if selected_state and selected_state != "All States" else None
+        try:
+            with message, st.spinner("Searching…"):
+                cat = hs.search(query=query_var or None, location=custom_loc or s_filter or b_filter,
+                                sources=sources, period=period, basin=b_filter, state=s_filter,
+                                cross_boundary=True)
+            st.session_state["catalog"] = cat
+            record(st.session_state, search_command(query_var, custom_loc, b_filter, s_filter, sources, period),
+                   f"{len(cat)} rows (search bar)")
+            st.session_state.update(selected=set(), editor_base=None, run=None, tidy=None,
+                                    last_download=None, estimate=None)
+            st.rerun()
+        except Exception as e:
+            message.error(f"Search failed: {e}")
+    return period, bad_period
+
+
+def render_status(slot, cat, advanced: bool) -> None:
+    """Counts for the search on screen, on one line, with a warning only when a source fell short."""
+    if cat is None:
+        return
+    count = len(st.session_state["selected"])
+    lines = source_status_lines(cat)
+    icons = {"ok": "✓", "partial": "!", "failed": "✗"}
+    pills = [f'<span class="metric-pill">Found <b>{len(cat):,}</b></span>',
+             f'<span class="metric-pill">Selected <b>{count:,}</b></span>']
+    pills += [f'<span class="metric-pill">{icons[x["level"]]} {x["text"]}</span>' for x in lines]
+    tidy = st.session_state.get("tidy")
+    if tidy is not None and not tidy.empty:
+        pills.append(f'<span class="metric-pill">Records <b>{len(tidy):,}</b></span>')
+    with slot.container():
+        st.markdown(" ".join(pills), unsafe_allow_html=True)
+        if any(x["level"] != "ok" for x in lines):
+            where = "the Source log below" if advanced else "Advanced mode (Source log)"
+            st.warning(f"Some sources failed or are partial, so results are incomplete. See {where}.")
+
+
+def render_map(cat, dark: bool) -> None:
+    title, toggles = st.columns([3, 1])
+    title.markdown('<div class="panel-title">Map</div>', unsafe_allow_html=True)
+    with toggles.popover("Layers", use_container_width=True):
+        show_india = st.checkbox("India National Boundary", key="layer_india")
+        show_basins = st.checkbox("CWC River Basins", key="layer_basins")
+        show_aquifers = st.checkbox("Major Aquifers", key="layer_aquifers")
+    active_b = st.session_state.get("active_basin") or "All India"
+    geojson_layers = []
+
+    if show_india:
+        ind_geo = load_india_boundary_geojson()
+        if ind_geo.get("features"):
+            geojson_layers.append({
+                "name": "India Boundary",
+                "geojson": ind_geo,
+                "interactive": False,
+                "style": {"color": "#374151" if not dark else "#9ca3af", "weight": 2.2, "fillOpacity": 0.0},
+            })
+
+    b_name = st.session_state.get("active_basin")
+    if show_basins:
+        if b_name and b_name != "All Basins":
+            b_geo = load_basin_geojson(b_name)
+            if b_geo.get("features"):
+                geojson_layers.append({
+                    "name": f"Basin: {b_name}",
+                    "geojson": b_geo,
+                    "style": {"color": "#2563eb", "weight": 2.2, "fillColor": "#3b82f6", "fillOpacity": 0.20},
+                })
+        else:
+            all_basins = load_basin_geojson("all")
+            if all_basins.get("features"):
+                geojson_layers.append({
+                    "name": "CWC River Basins",
+                    "geojson": all_basins,
+                    "style": {"color": "#3b82f6", "weight": 1.4, "fillColor": "#60a5fa", "fillOpacity": 0.06},
+                })
+
+    if show_aquifers:
+        aq_geo = load_aquifers_geojson()
+        if aq_geo.get("features"):
+            geojson_layers.append({
+                "name": "Major Aquifers",
+                "geojson": aq_geo,
+                "style": {"color": "#059669", "weight": 1.2, "fillColor": "#10b981", "fillOpacity": 0.15},
+            })
+
+    target_bounds = get_basin_bounds(b_name) if (b_name and b_name != "All Basins") else None
+    map_data = cat if cat is not None and not cat.empty else pd.DataFrame()
+    try:
+        hmap = create_map(map_data, output=None, basemap="osm", color_by="source", cluster=True,
+                          bounds=target_bounds, geojson_layers=geojson_layers, title=f"HydroSwift · {active_b}")
+        components.html(hmap.to_html(), height=MAP_HEIGHT, scrolling=False)
+        if not map_data.empty:
+            unmapped = int(pd.to_numeric(map_data["lat"], errors="coerce").isna().sum())
+            if unmapped:
+                st.caption(f"{unmapped:,} of {len(map_data):,} results have no coordinates (listed in the table only).")
+    except Exception as e:
+        st.info(f"The map could not be drawn: {e}")
+
+
+def render_download_bar(slot, cat, period, bad_period) -> None:
+    """Download and its options. Filled after the table, so it counts this run's ticks."""
+    selected = st.session_state["selected"]
+    count = len(selected)
+    busy = st.session_state.get("job") is not None
+
+    def begin():
+        rows = row_spec(cat, st.session_state["selected"])
+        record(st.session_state, f"get --rows {rows} --period {':'.join(period)}", "(Download button)")
+        start_download(pick_rows(cat, st.session_state["selected"]), period=period,
+                       output_dir=st.session_state.get("dest_input") or "output",
+                       export_format=st.session_state.get("export_format", "csv"))
+
+    if "dest_input" not in st.session_state:
+        st.session_state["dest_input"] = st.session_state["download_dir"]
+
+    with slot:
+        main_col, options_col = st.columns([3, 2])
+        # a callback, not "if clicked": the job must start exactly once
+        main_col.button(f"Download ({count})", disabled=count == 0 or busy or bad_period, type="primary",
+                        use_container_width=True, on_click=begin)
+        with options_col.popover("Options", use_container_width=True):
+            st.selectbox("Format", ["csv", "parquet", "gpkg", "json"], key="export_format",
+                         help="Station files are saved as CSV; other formats add one combined file.")
+            st.text_input("Download folder", key="dest_input")
+            st.session_state["download_dir"] = st.session_state["dest_input"]
+
+            def browse():
+                chosen = choose_folder(start=st.session_state["dest_input"], title="Select download folder")
+                if chosen:
+                    st.session_state["dest_input"] = chosen
+
+            st.button("Browse…", on_click=browse, use_container_width=True)
+            est_clicked = st.button("Estimate size", disabled=count == 0 or busy, use_container_width=True)
+            if est_clicked:
+                try:
+                    with st.spinner("Asking sources for record counts…"):
+                        est = hs.estimate(pick_rows(cat, selected))
+                    known = pd.to_numeric(est["EstRecords"], errors="coerce")
+                    text = (f"{int(known.sum()):,} records reported for {int(known.notna().sum())} items "
+                            "(whole datasets, before the year filter)")
+                    if known.isna().any():
+                        text += f"; size unknown for {int(known.isna().sum())} items"
+                    st.session_state["estimate"] = (frozenset(selected), text + ".")
+                except Exception as e:
+                    st.error(f"Estimate failed: {e}")
+            estimate = st.session_state.get("estimate")
+            if estimate and estimate[0] == frozenset(selected):
+                st.caption(estimate[1])
+            if st.button("Save search results to JSON", use_container_width=True, disabled=cat is None):
+                out = Path(st.session_state["download_dir"]) / "catalog.json"
+                out.parent.mkdir(parents=True, exist_ok=True)
+                hs.save_catalog(cat, out)
+                st.success(f"Saved to `{out}`")
+        if count and any(src == "WRIS" for src, _ in selected) and period[1] > period[0]:
+            st.caption("India-WRIS is slow over several years: one station can take minutes.")
+
+
+def render_activity():
+    """Progress of the running download, or the result of the last one."""
+    with st.container():
+        keep_slot()
+        job = st.session_state.get("job")
+        if job is not None:
+            return render_job(job)
+        if st.session_state.get("last_download"):
+            render_last_download(st.session_state["last_download"])
+    return None
+
+
+def render_find(period, bad_period, advanced: bool, dark: bool):
+    """Search results: pick on the left, see where on the right, download above the table."""
+    cat = st.session_state.get("catalog")
+    status_slot = st.empty()
+    progress = render_activity()
+
+    left, right = st.columns([6, 5])
+    with left:
+        st.markdown('<span class="hs-workspace"></span>', unsafe_allow_html=True)
+        # a container, not st.empty: replacing the block on each run would close the Options popover
+        bar_slot = st.container()
+        with bar_slot:
+            keep_slot()
+        table_area = st.container()
+        with table_area:
+            if cat is None:
+                st.info("Choose a place and years above, then press **Search**. "
+                        "Stations appear here to tick and download.")
+            elif cat.empty:
+                st.info("The search found nothing. Widen the place, variable or years.")
+            else:
+                render_selection(cat)
+        if cat is not None and not cat.empty:
+            render_download_bar(bar_slot, cat, period, bad_period)
+    with right:
+        render_map(cat, dark)
+    render_status(status_slot, cat, advanced)
+    return progress
+
+
+def main():
+    st.set_page_config(page_title="HydroSwift · Hydrological Studio", layout="wide",
+                       initial_sidebar_state="collapsed")
+    init_session()
+    # Streamlit forgets a widget's value on any run that does not draw it (another view, or a
+    # download in progress). Re-assigning keeps these.
+    for key in list(st.session_state):
+        if key in KEEP_KEYS + dock.STATE_KEYS or str(key).startswith(("filter_sources_", "viz_")):
+            st.session_state[key] = st.session_state[key]
+
+    view, advanced, dark = render_topbar()
     st.markdown(stylesheet(dark), unsafe_allow_html=True)
 
     job = st.session_state.get("job")
@@ -459,362 +743,46 @@ def main():
         if full_table is not None:
             st.session_state["last_download"]["table"] = full_table
 
-    # A permanent slot (empty unless Advanced is on), drawn before any early return. The dock
-    # itself floats at the bottom of the window.
+    # A permanent slot (empty unless Advanced is on). The dock itself floats at the bottom.
     with st.container():
+        keep_slot()
         if advanced:
             dock.render(run_console_command)
 
-    # -------------------------------------------------------------------------
-    # ROUTE 1: Dedicated CWC Reservoirs Module
-    # -------------------------------------------------------------------------
-    if is_rsms:
-        with st.sidebar:
-            st.markdown(sidebar_brand(dark), unsafe_allow_html=True)
-            st.markdown("### CWC RSMS Module")
-            st.caption("Real-Time Reservoir Storage Monitoring System operated by Central Water Commission.")
-            st.info("This module operates independently from station search & catalog discovery.")
-            # a callback: the view radio above already exists, so its value cannot be set afterwards
-            st.button("Switch to Hydrology Data", use_container_width=True,
-                      on_click=lambda: st.session_state.update(active_view="Hydrology Data"))
+    # One fixed slot per view: Streamlit matches elements by position, and shifting blocks
+    # between runs once left the page blank.
+    find_slot, analyse_slot, reservoir_slot = st.container(), st.container(), st.container()
+    for slot in (find_slot, analyse_slot, reservoir_slot):
+        with slot:
+            keep_slot()
 
-        render_rsms_view(dark)
-        st.markdown(get_credits_html(dark), unsafe_allow_html=True)
-        return
-
-    # -------------------------------------------------------------------------
-    # ROUTE 2: Hydrological Station Discovery & Visualization
-    # -------------------------------------------------------------------------
-    with st.sidebar:
-        st.markdown(sidebar_brand(dark), unsafe_allow_html=True)
-
-        st.header("1 · Boundary & Scope")
-        boundary_modes = ["Hydrological (Basin)", "Administrative (State)", "All / Custom"]
-        if st.session_state.get("boundary_mode") not in boundary_modes:
-            st.session_state["boundary_mode"] = "Hydrological (Basin)"
-
-        boundary_mode = st.radio(
-            "Boundary Type",
-            boundary_modes,
-            key="boundary_mode",
-            horizontal=True,
-            help="Hydrological queries search CWC/WRIS river basins and cross-discover constituent NWDP state data.",
-        )
-
-        selected_basin = None
-        selected_state = None
-        custom_loc = None
-
-        if boundary_mode == "Hydrological (Basin)":
-            basin_choices = ["All Basins"] + INDIAN_BASINS
-            selected_basin = st.selectbox("River Basin", basin_choices, key="sb_basin")
-            if selected_basin and selected_basin != "All Basins":
-                st.session_state["active_basin"] = selected_basin
-                constituent_states = get_states_for_basin(selected_basin)
-                if constituent_states:
-                    st.caption(f"**Constituent States**: {', '.join(constituent_states)}")
-            else:
-                st.session_state["active_basin"] = None
-
-        elif boundary_mode == "Administrative (State)":
-            state_choices = ["All States"] + INDIAN_STATES
-            selected_state = st.selectbox("State / Union Territory", state_choices, key="sb_state")
-            if selected_state and selected_state != "All States":
-                st.session_state["active_state"] = selected_state
-                intersecting_basins = get_basins_for_state(selected_state)
-                if intersecting_basins:
-                    st.caption(f"**Intersecting Basins**: {', '.join(intersecting_basins)}")
-            else:
-                st.session_state["active_state"] = None
-        else:
-            custom_loc = st.text_input("Custom Location / Keyword", key="sb_custom",
-                                       placeholder="e.g. Bangalore, Ganga, Godavari")
-
-        # Hydrological Variable Dropdown
-        var_choice = st.selectbox(
-            "Hydrological Variable",
-            STANDARD_VARIABLES,
-            key="sb_variable",
-            help="Filter by physical variable or select 'All Variables' for all observations.",
-        )
-        if var_choice == "Custom...":
-            query_var = st.text_input("Specify Variable Keyword", key="sb_custom_var",
-                                      placeholder="e.g. sediment, evaporation")
-        elif var_choice == "All Variables":
-            query_var = ""
-        else:
-            query_var = var_choice
-
-        # Date range
-        dcol1, dcol2 = st.columns(2)
-        start_year = dcol1.number_input("Start Year", min_value=1900, max_value=date.today().year, step=1, key="sb_start")
-        end_year = dcol2.number_input("End Year", min_value=1900, max_value=date.today().year, step=1, key="sb_end")
-        period = (str(int(start_year)), str(int(end_year)))
-        bad_period = start_year > end_year
-        if bad_period:
-            st.error("Start year is after end year.")
-
-        st.header("2 · Data Sources")
-        cwc_on = st.checkbox("CWC Flood Forecasting (FFS)", key="src_cwc", help="Live telemetry stage & rating-curve discharge")
-        wris_on = st.checkbox("India-WRIS OpenAPI 3.0", key="src_wris", help="Official India-WRIS REST API (telemetry & obs)")
-        nwdp_on = st.checkbox("NWDP Open Data", key="src_nwdp", help="India-WRIS CKAN open datasets (rainfall, groundwater)")
-
-        sources = []
-        if cwc_on:
-            sources.append("CWC")
-        if wris_on:
-            sources.append("WRIS")
-        if nwdp_on:
-            sources.append("NWDP")
-
-        # Search Trigger
-        job = st.session_state.get("job")
-        if st.button("Search & Discover", type="primary", use_container_width=True,
-                     disabled=bad_period or job is not None):
-            if not sources:
-                st.error("Please enable at least one data source.")
-            else:
-                with st.spinner("Discovering stations and catalog items..."):
-                    b_filter = selected_basin if selected_basin and selected_basin != "All Basins" else None
-                    s_filter = selected_state if selected_state and selected_state != "All States" else None
-                    loc_filter = custom_loc if custom_loc else (s_filter or b_filter)
-
-                    try:
-                        cat = hs.search(
-                            query=query_var or None,
-                            location=loc_filter,
-                            sources=sources,
-                            period=period,
-                            basin=b_filter,
-                            state=s_filter,
-                            cross_boundary=True,
-                        )
-                        st.session_state["catalog"] = cat
-                        record(st.session_state, search_command(query_var, custom_loc, b_filter, s_filter,
-                                                                sources, period), f"{len(cat)} rows (sidebar)")
-                        st.session_state.update(selected=set(), editor_base=None, run=None, tidy=None,
-                                                last_download=None, estimate=None)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Discovery error: {e}")
-
-    # -------------------------------------------------------------------------
-    # MAIN AREA. The action bar and counters are filled after the tabs, so they
-    # reflect ticks made in this run.
-    # -------------------------------------------------------------------------
-    cat = st.session_state.get("catalog")
-    total_discovered = len(cat) if cat is not None else 0
-    job = st.session_state.get("job")
-
-    # Every region gets one fixed slot. Streamlit 1.32 matches elements by position, and
-    # its page crashed (blank screen) when a finished download shifted blocks around.
-    action_bar = st.container()
-    with st.container():
-        if job is not None:
-            render_job(job)
-        elif st.session_state.get("last_download"):
-            render_last_download(st.session_state["last_download"])
-    pill_bar = st.empty()
-    tidy = st.session_state.get("tidy")
-    active_b = st.session_state.get("active_basin") or "All India"
-
-    with st.container():
-        if cat is not None:
-            render_source_status(cat, advanced)
-            if cat.empty:
-                st.info("The search found nothing. Widen the place, variable or years.")
-
-    def render_action_bar():
-        selected = st.session_state["selected"]
-        count = len(selected)
-        pills = [
-            f'<span class="metric-pill">Boundary: <b>{active_b}</b></span>',
-            f'<span class="metric-pill">Found: <b>{total_discovered:,}</b></span>',
-            f'<span class="metric-pill">Selected: <b>{count:,}</b></span>',
-        ]
-        if tidy is not None and not tidy.empty:
-            pills.append(f'<span class="metric-pill">Records: <b>{len(tidy):,}</b></span>')
-        pill_bar.markdown(" ".join(pills), unsafe_allow_html=True)
-
-        with action_bar:
-            dcol_btn, dcol_est, dcol_fmt, dcol_path, dcol_browse = st.columns([2.8, 3, 2, 3.6, 2])
-            busy = st.session_state.get("job") is not None
-            def begin():
-                rows = row_spec(cat, st.session_state["selected"])
-                record(st.session_state, f"get --rows {rows} --period {':'.join(period)}", "(Download button)")
-                start_download(pick_rows(cat, st.session_state["selected"]), period=period,
-                               output_dir=st.session_state.get("dest_input") or "output",
-                               export_format=st.session_state.get("export_format", "csv"))
-
-            # a callback, not "if clicked": the job must start exactly once
-            dcol_btn.button(f"Download ({count})", disabled=count == 0 or busy or bad_period,
-                            type="primary", use_container_width=True, on_click=begin)
-            est_clicked = dcol_est.button("Estimate size", disabled=count == 0 or busy, use_container_width=True)
-            if "export_format" not in st.session_state:
-                st.session_state["export_format"] = st.session_state.get("last_format", "csv")
-            export_format = dcol_fmt.selectbox("Format", ["csv", "parquet", "gpkg", "json"], label_visibility="collapsed",
-                                               key="export_format",
-                                               help="Station files are saved as CSV; other formats add one combined file.")
-            st.session_state["last_format"] = export_format
-            if "dest_input" not in st.session_state:
-                st.session_state["dest_input"] = st.session_state["download_dir"]
-            dest = dcol_path.text_input("Download folder", label_visibility="collapsed", key="dest_input")
-            st.session_state["download_dir"] = dest
-
-            def browse():
-                chosen = choose_folder(start=st.session_state["dest_input"], title="Select HydroSwift Download Destination")
-                if chosen:
-                    st.session_state["dest_input"] = chosen
-
-            dcol_browse.button("Browse…", on_click=browse, use_container_width=True)
-
-            if cat is not None and count == 0:
-                st.caption("Tick stations in the **Select Stations** view to download them.")
-            if count and any(src == "WRIS" for src, _ in selected) and end_year > start_year:
-                st.caption("India-WRIS is slow over several years: one station can take minutes.")
-            if est_clicked:
-                with st.spinner("Asking sources for record counts…"):
-                    try:
-                        est = hs.estimate(pick_rows(cat, selected))
-                        known = pd.to_numeric(est["EstRecords"], errors="coerce")
-                        text = (f"{int(known.sum()):,} records reported for {int(known.notna().sum())} items "
-                                "(whole datasets, before the year filter)")
-                        if known.isna().any():
-                            text += f"; size unknown for {int(known.isna().sum())} items"
-                        st.session_state["estimate"] = (frozenset(selected), text + ".")
-                    except Exception as e:
-                        st.error(f"Estimate failed: {e}")
-            estimate = st.session_state.get("estimate")
-            if estimate and estimate[0] == frozenset(selected):
-                st.caption(estimate[1])
-
-    if job is not None:
-        # Maps and tables are heavy to redraw every second, so only progress is shown meanwhile.
-        render_action_bar()
-        st.markdown(get_credits_html(dark), unsafe_allow_html=True)
-        for _ in range(8):  # overwrite elements left over from the previous page
-            st.empty()
-        time.sleep(1)
-        st.rerun()
-
-    # -------------------------------------------------------------------------
-    # Main views: Map Layers, Select Stations, Visualize
-    # -------------------------------------------------------------------------
-    # Not st.tabs: in Streamlit 1.32 tabs jump back to the first one when the page above them
-    # changes (every tick did that). A keyed radio remembers the view; each view has its own slot.
-    view = st.radio("View", ["Map Layers", "Select Stations", "Visualize"], key="main_view",
-                    horizontal=True, label_visibility="collapsed")
-    map_slot, select_slot, plot_slot = st.container(), st.container(), st.container()
-
-    # -------------------------------------------------------------------------
-    # VIEW 1: Map Layers with Auto-Zoom & Official Shapefile Overlays
-    # -------------------------------------------------------------------------
-    if view == "Map Layers":
-        with map_slot:
-            # Official shapefile overlay toggles
-            lcol1, lcol2, lcol3 = st.columns(3)
-            show_india = lcol1.checkbox("India National Boundary", value=True, help="Official survey boundary of India")
-            show_basins = lcol2.checkbox("CWC River Basins", value=True, help="Official Central Water Commission basin boundaries")
-            show_aquifers = lcol3.checkbox("Major Aquifers", value=False, help="India-WRIS / CGWB hydrogeological aquifer systems")
-
-            geojson_layers = []
-
-            if show_india:
-                ind_geo = load_india_boundary_geojson()
-                if ind_geo.get("features"):
-                    geojson_layers.append({
-                        "name": "India Boundary",
-                        "geojson": ind_geo,
-                        "interactive": False,
-                        "style": {"color": "#374151" if not dark else "#9ca3af", "weight": 2.2, "fillOpacity": 0.0},
-                    })
-
-            b_name = st.session_state.get("active_basin")
-            if show_basins:
-                if b_name and b_name != "All Basins":
-                    b_geo = load_basin_geojson(b_name)
-                    if b_geo.get("features"):
-                        geojson_layers.append({
-                            "name": f"Basin: {b_name}",
-                            "geojson": b_geo,
-                            "style": {"color": "#2563eb", "weight": 2.2, "fillColor": "#3b82f6", "fillOpacity": 0.20},
-                        })
-                else:
-                    all_basins = load_basin_geojson("all")
-                    if all_basins.get("features"):
-                        geojson_layers.append({
-                            "name": "CWC River Basins",
-                            "geojson": all_basins,
-                            "style": {"color": "#3b82f6", "weight": 1.4, "fillColor": "#60a5fa", "fillOpacity": 0.06},
-                        })
-
-            if show_aquifers:
-                aq_geo = load_aquifers_geojson()
-                if aq_geo.get("features"):
-                    geojson_layers.append({
-                        "name": "Major Aquifers",
-                        "geojson": aq_geo,
-                        "style": {"color": "#059669", "weight": 1.2, "fillColor": "#10b981", "fillOpacity": 0.15},
-                    })
-
-            # Calculate bounding box for auto-zoom
-            target_bounds = get_basin_bounds(b_name) if (b_name and b_name != "All Basins") else None
-
-            # Build interactive map (basemap defaults to osm, markers colored by data source)
-            map_data = cat if cat is not None and not cat.empty else pd.DataFrame()
-            try:
-                hmap = create_map(
-                    map_data,
-                    output=None,
-                    basemap="osm",
-                    color_by="source",
-                    cluster=True,
-                    bounds=target_bounds,
-                    geojson_layers=geojson_layers,
-                    title=f"HydroSwift · {active_b}",
-                )
-                components.html(hmap.to_html(), height=580, scrolling=False)
-                if not map_data.empty:
-                    unmapped = int(pd.to_numeric(map_data["lat"], errors="coerce").isna().sum())
-                    if unmapped:
-                        st.caption(f"{unmapped:,} of {len(map_data):,} results have no coordinates and are not on the map; "
-                                   "find them in Select Stations.")
-            except Exception as e:
-                st.info(f"Interactive Map initialized. Discovered stations with coordinates will appear here. (Info: {e})")
-
-    # -------------------------------------------------------------------------
-    # VIEW 2: Station selection
-    # -------------------------------------------------------------------------
-    if view == "Select Stations":
-        with select_slot:
-            if cat is None or cat.empty:
-                st.info("Nothing to select yet. Use **Search & Discover** in the sidebar.")
-            else:
-                render_selection(cat)
-                if st.button("Save search results to JSON"):
-                    out_p = Path(st.session_state.get("download_dir", "output")) / "catalog.json"
-                    out_p.parent.mkdir(parents=True, exist_ok=True)
-                    hs.save_catalog(cat, out_p)
-                    st.success(f"Saved catalog to `{out_p}`")
-
-    render_action_bar()
-
-    # -------------------------------------------------------------------------
-    # VIEW 3: Visualize
-    # -------------------------------------------------------------------------
-    if view == "Visualize":
-        with plot_slot:
+    progress = None
+    if view == VIEW_RESERVOIRS:
+        with reservoir_slot:
+            render_rsms_view(dark)
+    elif view == VIEW_ANALYSE:
+        with analyse_slot:
+            progress = render_activity()
+            tidy = st.session_state.get("tidy")
             if tidy is None or tidy.empty:
-                st.info("Select stations and press **Download** to analyse their time series.")
+                st.info("Nothing to analyse yet. In **Find & download**, tick stations and press **Download**.")
             else:
                 try:
                     from hydroswift.gui import visualize
                     visualize.render(tidy, dark, period=st.session_state.get("tidy_period"))
                 except ImportError:
                     st.error("Plotting needs plotly: pip install hydroswift[gui]")
+    else:
+        with find_slot:
+            period, bad_period = render_search_bar()
+            progress = render_find(period, bad_period, advanced, dark)
 
-    # Footer
     st.markdown(get_credits_html(dark), unsafe_allow_html=True)
+    job = st.session_state.get("job")
+    if job is not None:
+        if progress is None:  # a view without a progress row: just wait for the job
+            progress = st.empty()
+        follow(job, progress)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Dashboard layout
+
+* The sidebar is gone: search is one row at the top.
+* Results table and map sit side by side, with **Download** directly above the table; format and folder are under **Options**.
+* Top bar: **Find & download**, **Analyse**, **Reservoirs**, the **Advanced** switch and a **Menu**.
+
 ### Analysis, Advanced mode and footer
 
 * **Visualize:** summary and completeness, daily/monthly/annual aggregation, station comparison, monthly pattern, warning and danger exceedance events, FDC from daily means, optional exclusion of gauge-zero readings and spikes, CSV download of tables.
