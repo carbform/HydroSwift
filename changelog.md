@@ -1,6 +1,39 @@
 # Changelog
 
-## Unreleased — unified engine (breaking)
+## Unreleased
+
+### Dashboard layout
+
+* The sidebar is gone: search is one row at the top.
+* Results table and map sit side by side, with **Download** directly above the table; format and folder are under **Options**.
+* Top bar: **Find & download**, **Analyse**, **Reservoirs**, the **Advanced** switch and a **Menu**.
+
+### Analysis, Advanced mode and footer
+
+* **Visualize:** summary and completeness, daily/monthly/annual aggregation, station comparison, monthly pattern, warning and danger exceedance events, FDC from daily means, optional exclusion of gauge-zero readings and spikes, CSV download of tables.
+* **API and CLI:** `hs.summary()`, `hs.resample()` and `hyswift stats`.
+* **Data flag:** CWC stage equal to the gauge zero is marked `qc:gauge_zero` in `flag` (values unchanged).
+* **Advanced mode:** a docked terminal panel with the source log (hidden in normal mode) and a console for `hyswift` commands that update the page. It is not a shell, and is off unless the dashboard listens on localhost.
+* **Changed:** `hyswift-gui` now listens on localhost only. Footer is one line; the disclaimer and source links are in About.
+
+### Dashboard usability
+
+* Tick individual stations in **Select Stations** (nothing is pre-selected; the pop-up is gone).
+* Each source's status, skipped rows and assumptions are shown after a search.
+* Downloads run in the background with progress, **Cancel** and **Retry failed**; **Estimate size** asks sources for record counts.
+* Year inputs are validated; the layout stacks on narrow screens.
+* Map Layers, Select Stations and Visualize are a view switch that stays put (tabs jumped back to the map on each change).
+
+### Data-correctness fixes
+
+* **WRIS:** only the requested station's rows are saved (previously a whole district's rows could be saved under one station). Request failures are reported as errors, all pages are read, and search entries state that they reuse the CWC station table. Re-download WRIS files made with earlier versions.
+* **WRIS tidy data:** `method` is `observed`; the acquisition mode (manual/telemetry) moved to `flag`.
+* **WRIS water levels:** gauge readings above a local zero are now the separate variable `gauge_height`; they were mixed with sea-level elevations under `water_level`. The WRIS series name is kept in `flag`. Earlier files held at most the first 1,000 rows of a district reply.
+* **Rating curves:** discharge estimated from stage is no longer fitted (dashboard and `plot(kind="rating_curve")`).
+* **Dashboard:** Parquet/GeoPackage/JSON now write a combined file (station files stay CSV); CWC warning/danger lines are drawn; plots match variables exactly and keep sources separate.
+* **CWC:** `format="json"` now writes a file instead of reporting success without one. `merge()` also writes `.json`.
+
+### Unified engine (breaking)
 
 * **GUI rebuilt as one Find -> Review -> Get -> Use screen** on the shared engine: source-status strip, provenance columns (matched on, coverage, not stated by source), request list, size estimate, progress with Cancel, run results with plot and merge. The Configuration, Results and Unified Search tabs are gone.
 **One workflow: Find -> Review -> Get -> Use** (`search` -> `estimate` -> `fetch` -> `load`).

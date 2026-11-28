@@ -134,3 +134,10 @@ hs.swot_reservoir_merge(
     output_gpkg="output/unified_reservoir_swot_gauge.gpkg",
 )
 ```
+
+## Station statistics and aggregation
+
+```python
+stats = hs.summary(run)              # completeness, longest gap, min/median/mean/max per series
+monthly = hs.resample(run, "monthly")  # rainfall summed; levels and discharge averaged
+```

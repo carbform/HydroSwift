@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Iterable, List, Optional
 
 import pandas as pd
@@ -119,3 +121,48 @@ def progress_text(event: dict) -> str:
     if kind == "item_done":
         return f"[{event.get('index')}/{event.get('total')}] {event.get('status')}: {event.get('title') or event.get('id')}"
     return str(event)
+
+
+# --- selection and retry ----------------------------------------------------
+
+def row_keys(df: pd.DataFrame) -> list:
+    """(Source, ID) for every catalog row: the identity used for selection."""
+    return list(zip(df["Source"].astype(str), df["ID"].astype(str)))
+
+
+def pick_rows(catalog: pd.DataFrame, keys) -> pd.DataFrame:
+    """The full catalog rows (hidden columns and provenance kept) whose key is in *keys*."""
+    out = catalog[[k in keys for k in row_keys(catalog)]].copy()
+    out.attrs.update(catalog.attrs)
+    return out
+
+
+def needs_retry(run: pd.DataFrame) -> pd.Series:
+    """Items that failed, were cancelled, or were saved incomplete."""
+    return run["status"].isin(["error", "cancelled"]) | run["complete"].eq(False)
+
+
+def combine_runs(previous: Optional[pd.DataFrame], new: pd.DataFrame) -> pd.DataFrame:
+    """Results after a retry: new items replace old ones; a retry that got no file keeps the old file."""
+    if previous is None:
+        return new
+    old = {(r["source"], r["id"]): r for r in previous.to_dict("records")}
+    for item in new.to_dict("records"):
+        key = (item["source"], item["id"])
+        # pandas turns a missing path into None or NaN depending on version
+        if pd.notna(item.get("path")) or pd.isna(old.get(key, {}).get("path")):
+            old[key] = item
+    return pd.DataFrame(list(old.values()), columns=new.columns)
+
+
+def update_manifest(path, run: pd.DataFrame) -> None:
+    """List every item of a combined run in the retry's manifest.
+
+    ``load(folder)`` reads only the newest manifest, which would otherwise hold
+    just the retried items.
+    """
+    file = Path(path)
+    doc = json.loads(file.read_text())
+    doc["items"] = json.loads(run.to_json(orient="records"))  # NaN becomes null
+    doc["note"] = "combined with the earlier run of this download after a retry"
+    file.write_text(json.dumps(doc, indent=2))

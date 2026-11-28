@@ -63,9 +63,9 @@ hyswift gui
 hyswift-gui
 ```
 The studio opens automatically at `http://localhost:8501`, featuring:
-* **Hydrology Data**: Spatial scope selector (River Basin vs. State), variable filter, interactive auto-zooming Leaflet map, discovery pop-up modal, top download action bar, and visualizer.
-* **Reservoir Status**: Dedicated live bulletin and interactive storage map for ~180 CWC monitored reservoirs.
-* **Help & About**: Built-in workflow guides, links to official government APIs, and statutory disclaimer.
+* **Find & download**: Spatial scope selector (River Basin vs. State), variable filter, interactive auto-zooming Leaflet map, per-source search status, per-station selection, downloads with cancel and retry, and visualizer.
+* **Reservoirs**: Dedicated live bulletin and interactive storage map for ~180 CWC monitored reservoirs.
+* **Menu**: Built-in workflow guides, links to official government APIs, and statutory disclaimer.
 
 ---
 

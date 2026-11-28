@@ -31,7 +31,9 @@ Find -> Review -> Get -> Use
     hs.estimate(cat)                # adds EstRecords (exact for NWDP, unknown elsewhere)
     run = hs.fetch(cat, output_dir="output", period=("2020", "2022"))
     data = hs.load(run)             # tidy: time,value,variable,unit,station_id,...
-    hs.merge(run, "all.parquet")    # csv | parquet | gpkg
+    hs.merge(run, "all.parquet")    # csv | parquet | gpkg | json
+    hs.summary(run)                 # per-station statistics, completeness, gaps
+    hs.resample(run, "monthly")     # daily | monthly | annual
     hs.plot(run, "plots/")          # hydrographs, rating curves, hyetographs
     hs.map(cat, "map.html")         # interactive Leaflet map with alert layers
 
@@ -68,7 +70,7 @@ def fetch(table, *, output_dir="output", period=None, start_date=None, end_date=
         Applied to every source (NWDP: filtered after download, since the
         portal cannot filter by date; CWC: requested from the portal).
     format : "csv" | "xlsx" | "json"
-        NWDP supports csv/json, CWC csv/xlsx.
+        NWDP supports csv/json; CWC and WRIS csv/xlsx/json.
     rc_discharge : bool
         CWC discharge exists only as a rating-curve estimate from stage; it is
         labelled ``rc_guardian_2024`` in the data. Set False for stage only.
@@ -112,6 +114,25 @@ def estimate(table, *, network=True):
 def load(run):
     """Load fetched data as one tidy table (see :mod:`hydroswift.core.tidy`)."""
     from .core.tidy import load as _load
+    return _load(run)
+
+
+def summary(run):
+    """Per-station statistics, completeness and gaps for fetched data (see core.analysis)."""
+    from .core.analysis import summary as _summary
+    return _summary(_as_tidy(run))
+
+
+def resample(run, freq="daily"):
+    """Daily, monthly or annual values; rainfall summed, levels and discharge averaged."""
+    from .core.analysis import resample as _resample
+    return _resample(_as_tidy(run), freq)
+
+
+def _as_tidy(run):
+    from .core.tidy import TIDY_COLUMNS, load as _load
+    if isinstance(run, pd.DataFrame) and set(TIDY_COLUMNS).issubset(run.columns):
+        return run
     return _load(run)
 
 

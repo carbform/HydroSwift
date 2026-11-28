@@ -16,3 +16,10 @@
 | `help()`, `cli_help()`, `cite()`, `coffee()` | `hydroswift` | Utilities, citation metadata, and CLI reference. |
 
 See the [Python API Guide](PYTHON_API_GUIDE.md) and [Web GUI Guide](GUI_GUIDE.md) for detailed workflows.
+
+## Analysis
+
+| Function | Description |
+| :--- | :--- |
+| `hydroswift.summary(run)` | Per-series statistics, completeness of the record span, longest gap, gauge-zero count. |
+| `hydroswift.resample(run, freq)` | `daily`, `monthly` or `annual` values; rainfall summed, others averaged. |

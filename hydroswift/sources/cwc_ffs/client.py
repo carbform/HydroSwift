@@ -1117,6 +1117,12 @@ def download_station_detail(station, output_dir, args):
                 df.to_excel(writer, sheet_name="timeseries", index=False)
                 meta_df.to_excel(writer, sheet_name="metadata", index=False)
 
+        elif args.format == "json":
+            df.to_json(outfile, orient="records", indent=2, date_format="iso")
+
+        else:
+            raise ValueError(f"Unsupported format for CWC: {args.format}")
+
     except Exception as e:
         return {"status": "error", "path": None, "rows": len(df), "start": None, "end": None, "error": str(e)}
 

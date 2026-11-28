@@ -12,71 +12,51 @@ The studio launches automatically in your browser at `http://localhost:8501`.
 
 ---
 
-## Top Navigation & Modular Architecture
+## Layout
 
-HydroSwift decouples station-level observational discovery from national reservoir storage tracking via a top-level module switcher:
+A single top bar holds the three views (**Find & download**, **Analyse**, **Reservoirs**), the **Advanced** switch and a **Menu** (dark mode, help, about). There is no sidebar.
 
-1. **Hydrology Data**: Spatial boundary search, catalog discovery, multi-format downloading, auto-zooming Leaflet map, and interactive visualizers.
-2. **Reservoir Status**: Central Water Commission (CWC) Real-Time Reservoir Storage Monitoring System (RSMS) live bulletin and national capacity map.
-3. **Help & About**: Instant popovers in the top header with step-by-step workflow guides, official government API links, author profiles, and statutory disclaimers.
-4. **Dark Mode Toggle**: High-contrast dark theme toggle with instant stylesheet re-injection.
+## Find & download
 
----
+1. **Search row**: *Search by* river basin, state or keyword; the place; the variable; **From** and **To** years; **Sources**; **Search**.
+2. **Results table** (left): tick stations; filter by words or source; **Select all shown**, **Unselect shown**, **Clear selection**. Nothing is selected automatically.
+3. **Download (n)** (above the table): runs in the background with progress, **Cancel download**, and **Retry** for failed or incomplete items. **Options** holds the format (`csv`, `parquet`, `gpkg`, `json`; station files stay CSV), the download folder, **Estimate size** and **Save search results to JSON**.
+4. **Map** (right): stations by source; **Layers** toggles the India boundary, CWC basins and major aquifers. In narrow windows the map moves below the table.
+   * **India National Boundary**: official survey boundary (clicks disabled so markers are never shadowed).
+   * **CWC River Basins**: Central Water Commission major basin polygons; the map zooms to the chosen basin.
+   * **Major Aquifers**: CGWB / India-WRIS hydrogeological aquifer systems.
+   * Markers are coloured by source and sit in their own pane (`stationPane`), so popups stay clickable.
 
-## Module 1: Hydrology Data
+Each source's count is shown above the results; failed or partial sources raise a warning. Details are in the **Source log** of Advanced mode.
 
-### 1. Sidebar Boundary & Scope
-* **Hydrological (Basin)**: Query by official CWC River Basin (e.g., Cauvery, Ganga, Godavari, Krishna, Narmada, Mahanadi). The engine automatically cross-discovers constituent administrative state datasets from NWDP.
-* **Administrative (State)**: Query by Indian State or Union Territory (e.g., Karnataka, Maharashtra, Odisha). Intersecting river basins are automatically identified.
-* **All / Custom**: Free-form keyword search across rivers, districts, and station locations.
+## Analyse
+Pick a station and an analysis:
+* **Time series**: stage and discharge with CWC warning/danger lines; as reported, daily, monthly or annual; range slider.
+* **Summary & data quality**: statistics, completeness, longest gap, gauge-zero count.
+* **Compare stations**: one variable across stations.
+* **Monthly pattern**: spread by month (totals for rainfall) and departure from that month's average.
+* **Warning & danger exceedance**: events with start, end, hours and peak, timed from reading timestamps.
+* **Flow duration curve**: from daily mean discharge.
+* **Rating curve**: observed discharge only; estimated discharge is never fitted.
+* **Rainfall** and **Groundwater**.
 
-### 2. Hydrological Variables & Data Sources
-* **Variable Dropdown**: Filter by *Water level*, *Discharge*, *Rainfall*, *Groundwater level*, *Water quality*, *All Variables*, or specify a custom keyword.
-* **Data Sources**:
-  * **CWC Flood Forecasting System (FFS)**: Real-time river water levels and rating-curve discharge.
-  * **India-WRIS OpenAPI 3.0**: Official REST API endpoints for national observation networks.
-  * **NWDP Open Data**: CKAN open data portal for groundwater monitoring wells, rainfall, and climate parameters.
-* **Search & Discover**: Triggers catalog discovery across all enabled sources and constituent spatial boundaries.
-
-### 3. Discovery Pop-Up Modal
-Upon completing catalog search, an automatic pop-up modal card appears:
-* Shows total datasets & stations discovered.
-* Batch selection shortcuts: **Select All**, **First 10 Stations**, **View on Map**, and **Close Pop-up**.
-* Catalog preview table displaying Source, Title, Location, Variable, and Temporal Resolution.
-
-### 4. Top Download Action Bar
-Located directly at the top of the main screen (not hidden in the sidebar):
-* **Download Selected**: One-click primary download trigger for all selected stations.
-* **Format Selector**: Export directly to `csv`, `parquet`, `gpkg` (GeoPackage), or `json`.
-* **Destination Folder**: Configurable target folder path with a native **Browse…** OS directory picker button (`choose_folder`).
-* **Live Progress**: Progress bar reporting completed downloads, per-file record counts, and provenance logging to `manifest.json`.
+Readings equal to the station's gauge zero, and spikes above a limit you set, can be excluded; the page says how many.
 
 ---
 
-## Main Workspace Tabs
+## Advanced Mode
 
-### Tab 1: Map Layers
-Interactive auto-zooming Leaflet map powered by official vector shapefiles:
-* **Official Overlays**:
-  * **India National Boundary**: Official survey boundary of India (interactive clicks disabled so markers are never shadowed).
-  * **CWC River Basins**: Central Water Commission major basin polygons with automated auto-zoom bounding box fitting.
-  * **Major Aquifers**: CGWB / India-WRIS hydrogeological aquifer systems.
-* **Marker Coloring**: Automatically color-coded by source (CWC: blue, WRIS: green, NWDP: orange).
-* **Dedicated Map Panes**: Station and reservoir markers sit in `stationPane` (`zIndex: 650`), ensuring marker popups are unconditionally clickable without polygon interference.
+Turn on **Advanced** (top right) for a terminal panel docked at the bottom of the window. **Source log** shows what each source returned, skipped or assumed; **Console** takes commands that update the page above:
 
-### Tab 2: Discovered Catalog
-* Search and filter table with keyword searching.
-* Shows Source, Station Title, Location, Variable, Resolution, Temporal Coverage, and Provider.
-* Quick selection shortcuts: *First 5 Stations*, *First 10 Stations*, *Add Filtered*, *Select All*.
-* Export catalog summary directly to `catalog.json`.
+```text
+search --basin Cauvery --source CWC --period 2024:2024
+select 0,1
+get
+plot muthankera --kind exceedance
+stats --freq monthly --out monthly.csv
+```
 
-### Tab 3: Visualize
-Publication-grade interactive plots rendered with Plotly:
-1. **Stage & Discharge Hydrograph**: Synchronized dual-axis plot showing river stage (meters) on the primary axis and discharge (m³/s) on the secondary axis, with Warning Level and Danger Level threshold lines.
-2. **Stage-Discharge Rating Curve (H-Q)**: Fitted power-law curve ($Q = a(h - h_0)^b$) over synchronized stage-discharge observation pairs.
-3. **Rainfall Hyetograph & Mass Curve**: Inverted bar chart showing precipitation hyetograph paired with cumulative mass curve.
-4. **Flow Duration Curve (FDC)**: Logarithmic discharge exceedance probability curve with marked $Q_{10}$ (high flow), $Q_{50}$ (median flow), and $Q_{90}$ (low flow) percentiles.
-5. **Groundwater Level Hydrograph**: Hydrograph of groundwater depth and water table fluctuations with mean water table reference line, optional inverted Y-axis toggle (mbgl depth convention), and KPI metrics (**Min Level**, **Mean Level**, **Max Level**, **Fluctuation Range**).
+Type `help` for the full list. Searches and downloads made with the mouse are logged as commands. It is not a system shell. It runs only when the dashboard listens on localhost (the default for `hyswift-gui`).
 
 ---
 

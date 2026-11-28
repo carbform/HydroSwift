@@ -24,7 +24,9 @@ def run_web():
         sys.exit(1)
 
     web_script = str(Path(__file__).parent / "web.py")
-    sys.argv = ["streamlit", "run", web_script, "--server.headless=false", "--browser.gatherUsageStats=false"]
+    sys.argv = ["streamlit", "run", web_script, "--server.headless=false",
+                "--server.address=localhost",  # local only: the dashboard can write files "--browser.gatherUsageStats=false",
+                "--theme.base=light", "--theme.primaryColor=#2563eb"]
     sys.exit(stcli.main())
 
 

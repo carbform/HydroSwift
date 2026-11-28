@@ -506,7 +506,8 @@ class WrisAdapter:
             target_var = "River Water Level"
 
         df = load_station_table(refresh=False)
-        st.note = f"WRIS OpenAPI station list mapped from metadata catalog for variable '{target_var}'"
+        st.note = (f"WRIS entries for '{target_var}' reuse the CWC station table; WRIS was not queried, "
+                   "so a station may have no WRIS data for this variable")
         rows = []
         for _, r in df.iterrows():
             m = match_location(location, {
@@ -530,7 +531,7 @@ class WrisAdapter:
                 "Provider": "India-WRIS / CWC",
                 "Endpoint": f"{self.endpoint}/Dataset/{target_var}",
                 "MatchedOn": m,
-                "Inferred": "Resolution,Unit,Coverage",
+                "Inferred": "Station list,Variable availability,Resolution,Unit,Coverage",
                 "_state": str(r.get("state", "")),
                 "_district": str(r.get("district", "")),
                 "_basin": str(r.get("basin", "")),
@@ -563,7 +564,8 @@ class WrisAdapter:
         rec.req_start, rec.req_end = start_date, end_date
 
         try:
-            records = []
+            def _page(read, total):
+                _emit(opts, "page", rec, read=read, total=total)
             if state and district:
                 records = client.fetch_admin(
                     variable=var,
@@ -571,6 +573,8 @@ class WrisAdapter:
                     district_name=district,
                     start_date=start_date,
                     end_date=end_date,
+                    cancel=opts.cancel,
+                    progress=_page,
                 )
             elif basin and tributary:
                 records = client.fetch_basin(
@@ -579,21 +583,40 @@ class WrisAdapter:
                     tributary_name=tributary,
                     start_date=start_date,
                     end_date=end_date,
+                    cancel=opts.cancel,
+                    progress=_page,
                 )
-
-            if not records:
-                rec.status, rec.records = "empty", 0
+            else:
+                rec.status, rec.records = "error", 0
+                rec.error = "station has no state/district or basin/river, so WRIS cannot be queried"
                 return rec
 
+            info = getattr(client, "last_fetch", None)
+            info = info if isinstance(info, dict) else {}
+            rec.complete = info.get("complete", True)
+            if not rec.complete:
+                rec.error = info.get("error")
+            if info.get("cancelled"):
+                rec.status = "cancelled"
+                return rec
+
+            if not records:
+                rec.status, rec.records = ("empty" if rec.complete else "error"), 0
+                return rec
+
+            # WRIS answers for a whole district/tributary: keep this station only
             df = pd.DataFrame(records)
             sid = str(row["ID"]).strip().lower()
-            if "stationCode" in df.columns:
-                matches = df["stationCode"].astype(str).str.strip().str.lower() == sid
-                if matches.any():
-                    df = df[matches]
+            if "stationCode" not in df.columns:
+                rec.status, rec.records = "error", 0
+                rec.error = "WRIS reply has no stationCode, so rows cannot be attributed to this station"
+                return rec
+            total = len(df)
+            df = df[df["stationCode"].astype(str).str.strip().str.lower() == sid]
 
             if df.empty:
-                rec.status, rec.records = "empty", 0
+                rec.status, rec.records = ("empty" if rec.complete else "error"), 0
+                rec.error = rec.error or f"WRIS returned {total} rows for the area, none for station {row['ID']}"
                 return rec
 
             outdir = os.path.join(opts.output_dir, "wris", _slug(state or basin or "all"))
@@ -744,6 +767,9 @@ def _find_prior(output_dir, rec_key, lo, hi):
         except Exception:
             continue
         for it in items:
+            # WRIS files saved without a completeness mark predate station filtering: never reuse
+            if it.get("source") == "WRIS" and it.get("complete") is not True:
+                continue
             if (it.get("source"), it.get("id")) == rec_key and (it.get("status") == "saved" or (it.get("status") == "skipped" and it.get("reused"))) \
                and it.get("req_start") == lo and it.get("req_end") == hi \
                and it.get("complete") is not False and it.get("path") and Path(it["path"]).exists():
@@ -784,6 +810,7 @@ def fetch_catalog(table: pd.DataFrame, *, output_dir="output", period=None, star
         if prior:
             base.status, base.path, base.records, base.reused = "skipped", prior["path"], prior.get("records"), True
             base.start, base.end = prior.get("start"), prior.get("end")
+            base.complete = prior.get("complete")
             base.error = "already downloaded for this exact request (see earlier manifest); use overwrite=True to redo"
             rec = base
         else:

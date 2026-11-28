@@ -49,6 +49,15 @@ hyswift search [query] [--where TEXT] [--basin NAME] [--state NAME] [--ids ID1,I
 * `--estimate`: Queries exact record count estimates from supporting providers (NWDP).
 * `--save FILE`: Saves the discovered catalog along with full search provenance into JSON.
 
+### Station statistics
+
+A folder reads only its newest manifest; name a `manifest*.json` to pick a run.
+
+```bash
+hyswift stats output/manifest.json        # coverage, gaps, min/mean/max per station
+hyswift stats output/manifest.json --freq monthly --out monthly.csv
+```
+
 ---
 
 ## 2. `get`

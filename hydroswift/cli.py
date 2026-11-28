@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
     sh = sub.add_parser("show", help="Summarise fetched data (tidy view)")
     sh.add_argument("path", help="output directory or manifest*.json")
 
+    stt = sub.add_parser("stats", help="Station statistics, completeness and gaps")
+    stt.add_argument("path", help="output directory or manifest*.json")
+    stt.add_argument("--freq", choices=["daily", "monthly", "annual"], help="aggregated values instead of statistics")
+    stt.add_argument("--out", help="also write the table to this CSV file")
+
     m = sub.add_parser("merge", help="Merge fetched data into one csv/parquet/gpkg")
     m.add_argument("path")
     m.add_argument("output")
@@ -124,6 +129,24 @@ def print_status(df):
         print("  !! the listing is PARTIAL; some sources failed or were truncated")
 
 
+def _which_manifest(path):
+    """For a folder, say which manifest is read, and what to do when it holds no files."""
+    import json
+    from pathlib import Path
+
+    folder = Path(path)
+    if not folder.is_dir():
+        return
+    manifests = sorted(folder.glob("manifest*.json"), key=lambda p: p.stat().st_mtime)
+    if not manifests:
+        return
+    items = json.loads(manifests[-1].read_text()).get("items", [])
+    print(f"Reading the newest manifest: {manifests[-1]}")
+    if not any(i.get("path") for i in items):
+        print(f"It saved no files (cancelled or empty run). Pass an earlier one of the "
+              f"{len(manifests)} manifest*.json files in this folder instead.")
+
+
 def _rows(spec, n):
     if not spec:
         return list(range(n))
@@ -179,6 +202,7 @@ def run(args) -> int:
         return 1 if (res["status"] == "error").any() else 0
 
     if cmd == "show":
+        _which_manifest(args.path)
         df = api.load(args.path)
         if df.empty:
             print("No tidy data.")
@@ -189,6 +213,18 @@ def run(args) -> int:
             print(g.to_string())
         for u in df.attrs.get("unmapped", []):
             print(f"UNMAPPED {u['file']}: {u['reason']}")
+        return 0
+
+    if cmd == "stats":
+        _which_manifest(args.path)
+        table = api.resample(args.path, args.freq) if args.freq else api.summary(args.path)
+        print(table.to_string(index=False) if not table.empty else "No data.")
+        if not args.freq and not table.empty:
+            print("completeness_pct_of_record: days with data between each series' first and last reading,"
+                  " not of the period you requested.")
+        if args.out:
+            table.to_csv(args.out, index=False)
+            print("Saved:", args.out)
         return 0
 
     if cmd == "merge":
