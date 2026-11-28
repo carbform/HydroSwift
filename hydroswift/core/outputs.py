@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
+from .analysis import duration_curve
 from .mapping import create_map, HydroMap
 from .tidy import TIDY_COLUMNS, load as _load
 
@@ -49,7 +50,7 @@ def _get_cwc_threshold_lookup() -> Dict[str, Dict[str, Any]]:
 
 
 def merge(run, output="output/merged.parquet") -> pd.DataFrame:
-    """Write the tidy table of *run* to .csv, .parquet or .gpkg and return it."""
+    """Write the tidy table of *run* to .csv, .parquet, .gpkg or .json and return it."""
     df = run if (isinstance(run, pd.DataFrame) and set(TIDY_COLUMNS).issubset(run.columns)) else _load(run)
     if df.empty:
         raise ValueError(f"Nothing to merge; unmapped files: {df.attrs.get('unmapped')}")
@@ -60,6 +61,8 @@ def merge(run, output="output/merged.parquet") -> pd.DataFrame:
         df.to_csv(out, index=False)
     elif ext == ".parquet":
         df.to_parquet(out, index=False)
+    elif ext == ".json":
+        df.to_json(out, orient="records", indent=2, date_format="iso")
     elif ext == ".gpkg":
         import geopandas as gpd
         g = df.dropna(subset=["lat", "lon"])
@@ -72,7 +75,7 @@ def merge(run, output="output/merged.parquet") -> pd.DataFrame:
         if dropped:
             warnings.warn(f"{dropped} of {len(df)} rows have no coordinates and were not written to the GeoPackage.")
     else:
-        raise ValueError(f"Unsupported output type {ext!r}; use .csv, .parquet or .gpkg")
+        raise ValueError(f"Unsupported output type {ext!r}; use .csv, .parquet, .gpkg or .json")
     return df
 
 
@@ -365,6 +368,11 @@ def _plot_rating_curve(df, output_dir, figsize, dpi):
     for (src, sid), g in df.groupby(["source", "station_id"], dropna=False):
         gw = g[g["variable"] == "water_level"].copy()
         gq = g[g["variable"] == "discharge"].copy()
+        estimated = gq["method"].fillna("observed") != "observed"
+        if estimated.any():
+            warnings.warn(f"{sid}: discharge estimated from stage is excluded from the rating curve "
+                          "(fitting it would only reproduce the source rating curve).")
+            gq = gq[~estimated]
 
         if gw.empty or gq.empty:
             continue
@@ -481,21 +489,18 @@ def _plot_fdc(df, output_dir, figsize, dpi):
     fig_size = figsize or (8, 4.5)
 
     for (src, sid), g in q_df.groupby(["source", "station_id"], dropna=False):
-        vals = pd.to_numeric(g["value"], errors="coerce").dropna().sort_values(ascending=False).values
-        if len(vals) < 5:
+        curve = duration_curve(g)  # daily means, same as the dashboard
+        if len(curve) < 5:
             continue
 
-        n = len(vals)
-        prob = (np.arange(1, n + 1) / (n + 1)) * 100.0
+        vals, prob = curve["value"].to_numpy(), curve["exceedance_pct"].to_numpy()
 
         fig, ax = plt.subplots(figsize=fig_size)
         ax.plot(prob, vals, color="#059669", lw=1.8, label="Flow Duration Curve")
         ax.set_yscale("log")
 
         # Mark percentiles Q10, Q50, Q90
-        q10 = np.percentile(vals, 90)
-        q50 = np.percentile(vals, 50)
-        q90 = np.percentile(vals, 10)
+        q10, q50, q90 = (float(np.interp(p, prob, vals)) for p in (10, 50, 90))
 
         for q_val, p_pct, lbl in [(q10, 10, "Q10 (High Flow)"), (q50, 50, "Q50 (Median)"), (q90, 90, "Q90 (Low Flow)")]:
             ax.axvline(p_pct, color="#94a3b8", linestyle=":", lw=1)

@@ -31,29 +31,14 @@ CONTROL_H = "2.65rem"
 
 
 def get_credits_html(dark: bool = False) -> str:
-    """Rich publication credits footer with official API links, authors, and disclaimer."""
-    c = DARK if dark else LIGHT
+    """One-line footer. The full disclaimer and data-source links are in the About popover."""
+    from hydroswift import __version__
+    link = '<a href="{}" target="_blank" rel="noopener">{}</a>'
     return (
-        f'<div class="credits">'
-        f'<b>HydroSwift</b> &nbsp;·&nbsp; '
-        f'<a href="https://github.com/carbform/HydroSwift" target="_blank" rel="noopener">GitHub Repository</a> &nbsp;·&nbsp; '
-        f'Developed by <a href="https://github.com/carbform" target="_blank" rel="noopener">carbform</a> '
-        f'(<a href="https://carbform.github.io" target="_blank" rel="noopener">website</a>) &nbsp;&amp;&nbsp; '
-        f'<a href="https://github.com/bharathk113" target="_blank" rel="noopener">bharathk113</a>'
-        f'<div style="margin-top: 0.5rem; font-size: 0.76rem; letter-spacing: 0.04em;">'
-        f'Official APIs: '
-        f'<a href="https://ffs.india-water.gov.in/" target="_blank" rel="noopener">CWC Flood Forecasting (FFS)</a> &nbsp;·&nbsp; '
-        f'<a href="http://waris.cwc.gov.in/" target="_blank" rel="noopener">CWC RSMS</a> &nbsp;·&nbsp; '
-        f'<a href="https://indiawris.gov.in/" target="_blank" rel="noopener">India-WRIS OpenAPI 3.0</a> &nbsp;·&nbsp; '
-        f'<a href="https://data.gov.in/" target="_blank" rel="noopener">National Water Data Portal (NWDP)</a>'
-        f'</div>'
-        f'<div style="margin-top: 0.65rem; font-size: 0.72rem; color: {c["muted"]}; max-width: 960px; margin-left: auto; margin-right: auto; line-height: 1.45;">'
-        f'<b>Disclaimer:</b> HydroSwift is an independent, open-source scientific software suite for hydrological data aggregation and visualization. '
-        f'It is not affiliated with, endorsed by, or an official product of the Ministry of Jal Shakti, Central Water Commission (CWC), or National Informatics Centre (NIC). '
-        f'Hydrological data accessed via public endpoints is provided &ldquo;as is&rdquo; for research and monitoring purposes. '
-        f'Please consult official government portals for statutory advisories and flood warnings.'
-        f'</div>'
-        f'</div>'
+        f'<div class="credits"><b>HydroSwift</b> {__version__} &nbsp;·&nbsp; '
+        + link.format("https://github.com/carbform/HydroSwift", "GitHub") + " &nbsp;·&nbsp; "
+        + link.format("https://hydroswift.readthedocs.io", "Docs") + " &nbsp;·&nbsp; "
+        + "Independent tool, not an official CWC product. See About.</div>"
     )
 
 
@@ -139,7 +124,20 @@ h5, h2, h3, h4 {{
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p, .stCaption {{ color: {c['muted']}; font-size: 0.82rem; }}
 label, [data-testid="stWidgetLabel"] p {{ font-size: 0.82rem !important; color: {c['muted']} !important; letter-spacing: 0.03em; }}
 
-div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ min-width: 0; }}
+@media (min-width: 641px) {{
+  div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ min-width: 0; }} }}
+div[data-testid="stRadio"] label p, [data-testid="stToggle"] label p {{ white-space: nowrap; }}
+div[data-testid="stRadio"] div[role="radiogroup"] {{ flex-wrap: wrap; }}
+.stButton button *, [data-testid="stPopover"] button * {{ overflow: hidden; text-overflow: ellipsis; }}
+/* Half-width windows: let columns wrap instead of squeezing their labels */
+@media (min-width: 641px) and (max-width: 1200px) {{
+  div[data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; }}
+  div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ min-width: 10rem !important; }} }}
+@media (max-width: 640px) {{
+  div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
+    min-width: 100% !important; flex: 1 1 100% !important; }}
+  [data-testid="stToggle"] {{ justify-content: flex-start; }}
+  .block-container {{ padding: 3.2rem 1rem 2rem 1rem !important; }} }}
 
 /* Subtle Neobrutal Buttons */
 .stButton button, [data-testid="stPopover"] button, .stDownloadButton button {{
@@ -162,6 +160,8 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{ min-width: 0
   background: {c['tint']} !important; border: 1.5px solid {c['muted']} !important; opacity: .6;
   box-shadow: none !important; transform: none !important; cursor: not-allowed; }}
 .stButton button:disabled * {{ color: {c['muted']} !important; }}
+
+.stNumberInput button {{ background: {c['field']} !important; color: {c['ink']} !important; }}
 
 /* Radio Buttons: Clean Neobrutal Segmented Controls */
 [data-testid="stRadio"] label {{ cursor: pointer !important; }}

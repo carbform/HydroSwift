@@ -23,6 +23,9 @@ from typing import Optional
 
 import pandas as pd
 
+# token inside ``flag``: the reading equals the station's gauge zero (dry gauge or no reading)
+GAUGE_ZERO_FLAG = "qc:gauge_zero"
+
 TIDY_COLUMNS = ["time", "value", "variable", "unit", "station_id", "station_name",
                 "source", "lat", "lon", "method", "flag", "file"]
 
@@ -30,6 +33,7 @@ TIDY_COLUMNS = ["time", "value", "variable", "unit", "station_id", "station_name
 VARIABLES = {
     "rainfall": ("mm", "Rainfall"),
     "water_level": ("m", "River / surface water level"),
+    "gauge_height": ("m", "Staff gauge reading above local zero (not sea level)"),
     "discharge": ("m3/s", "River discharge"),
     "groundwater_level": ("m", "Groundwater level"),
     "reservoir_level": ("m", "Reservoir water level"),
@@ -204,6 +208,13 @@ def tidy_cwc(df: pd.DataFrame, file: str, name=None):
                                    "flag": pd.Series(None, index=df.index).where(~derived, "estimated from stage via rating curve")}))
     if not parts:
         return None, "no water level or discharge columns"
+    if "water_depth" in df.columns:  # wse - gauge zero, written when the zero is known
+        at_zero = pd.to_numeric(df["water_depth"], errors="coerce").abs() < 1e-6
+        for part in parts:
+            note = f"{GAUGE_ZERO_FLAG} (stage equals gauge zero: dry gauge or no reading)"
+            old = part["flag"] if "flag" in part else pd.Series(None, index=part.index)
+            part["flag"] = [(f"{note}; {f}" if isinstance(f, str) else note) if z else f
+                            for z, f in zip(at_zero, old)]
     out = pd.concat(parts, ignore_index=True).dropna(subset=["time", "value"])
     return out[TIDY_COLUMNS], None
 
@@ -273,7 +284,25 @@ def tidy_wris(df: pd.DataFrame, file: str, title: Optional[str] = None):
     if sname is None and title:
         sname = pd.Series(title, index=df.index)
 
-    mode = df["dataAcquisitionMode"].astype(str).str.lower() if "dataAcquisitionMode" in df.columns else pd.Series("observed", index=df.index)
+    # acquisition mode (manual / telemetry) is still an observation: keep it in flag, not method
+    flags = "; ".join(flag) or None
+    if "dataAcquisitionMode" in df.columns:
+        mode = df["dataAcquisitionMode"].dropna().astype(str).str.lower()
+        note = pd.Series("acquisition mode: " + mode, index=mode.index)
+        flags = note.str.cat([flags] * len(note), sep="; ") if flags else note
+        flags = flags.reindex(df.index)
+
+    # One WRIS station can report several series at the same times. Gauge readings above a
+    # local zero (HZS) must not share a variable with sea-level elevations (HHS, HHT).
+    variable = pd.Series(var, index=df.index)
+    code = df["datatypeCode"].astype(str).str.upper() if "datatypeCode" in df.columns else pd.Series("", index=df.index)
+    desc = df["description"].fillna("").astype(str) if "description" in df.columns else pd.Series("", index=df.index)
+    if var == "water_level":
+        variable[(code == "HZS") | desc.str.rstrip().str.endswith("(0)")] = "gauge_height"
+    if desc.str.len().any():
+        base = flags if isinstance(flags, pd.Series) else pd.Series(flags, index=df.index)
+        flags = pd.Series(["; ".join(x for x in (f"series: {d}" if d else None, b if isinstance(b, str) else None) if x) or None
+                           for d, b in zip(desc, base)], index=df.index)
 
     lat = pd.to_numeric(df["latitude"], errors="coerce") if "latitude" in df.columns else None
     lon = pd.to_numeric(df["longitude"], errors="coerce") if "longitude" in df.columns else None
@@ -281,15 +310,15 @@ def tidy_wris(df: pd.DataFrame, file: str, title: Optional[str] = None):
     out = pd.DataFrame({
         "time": t,
         "value": v,
-        "variable": var,
+        "variable": variable,
         "unit": unit,
         "station_id": sid.astype(str) if sid is not None else None,
         "station_name": sname.astype(str) if sname is not None else None,
         "source": "WRIS",
         "lat": lat,
         "lon": lon,
-        "method": mode.fillna("observed"),
-        "flag": "; ".join(flag) or None,
+        "method": "observed",
+        "flag": flags,
         "file": file,
     })
     return out.dropna(subset=["time", "value"])[TIDY_COLUMNS], None

@@ -38,24 +38,21 @@ HydroSwift decouples station-level observational discovery from national reservo
   * **NWDP Open Data**: CKAN open data portal for groundwater monitoring wells, rainfall, and climate parameters.
 * **Search & Discover**: Triggers catalog discovery across all enabled sources and constituent spatial boundaries.
 
-### 3. Discovery Pop-Up Modal
-Upon completing catalog search, an automatic pop-up modal card appears:
-* Shows total datasets & stations discovered.
-* Batch selection shortcuts: **Select All**, **First 10 Stations**, **View on Map**, and **Close Pop-up**.
-* Catalog preview table displaying Source, Title, Location, Variable, and Temporal Resolution.
+### 3. Search Results
+After a search, each source shows how many items it returned, and whether it failed or was partial. The details are in the **Source log** of Advanced mode. Nothing is selected automatically.
 
-### 4. Top Download Action Bar
-Located directly at the top of the main screen (not hidden in the sidebar):
-* **Download Selected**: One-click primary download trigger for all selected stations.
-* **Format Selector**: Export directly to `csv`, `parquet`, `gpkg` (GeoPackage), or `json`.
-* **Destination Folder**: Configurable target folder path with a native **Browse…** OS directory picker button (`choose_folder`).
-* **Live Progress**: Progress bar reporting completed downloads, per-file record counts, and provenance logging to `manifest.json`.
+### 4. Download Bar
+Located at the top of the main screen:
+* **Download (n)**: Downloads the ticked stations in the background, with progress, **Cancel download**, and **Retry** for failed or incomplete items.
+* **Estimate size**: Asks sources for record counts (only NWDP reports them).
+* **Format Selector**: Station files are saved as CSV; `parquet`, `gpkg` or `json` also writes one combined file.
+* **Destination Folder**: Target folder, with a **Browse…** OS directory picker.
 
 ---
 
-## Main Workspace Tabs
+## Main Workspace Views
 
-### Tab 1: Map Layers
+### View 1: Map Layers
 Interactive auto-zooming Leaflet map powered by official vector shapefiles:
 * **Official Overlays**:
   * **India National Boundary**: Official survey boundary of India (interactive clicks disabled so markers are never shadowed).
@@ -64,19 +61,40 @@ Interactive auto-zooming Leaflet map powered by official vector shapefiles:
 * **Marker Coloring**: Automatically color-coded by source (CWC: blue, WRIS: green, NWDP: orange).
 * **Dedicated Map Panes**: Station and reservoir markers sit in `stationPane` (`zIndex: 650`), ensuring marker popups are unconditionally clickable without polygon interference.
 
-### Tab 2: Discovered Catalog
-* Search and filter table with keyword searching.
-* Shows Source, Station Title, Location, Variable, Resolution, Temporal Coverage, and Provider.
-* Quick selection shortcuts: *First 5 Stations*, *First 10 Stations*, *Add Filtered*, *Select All*.
-* Export catalog summary directly to `catalog.json`.
+### View 2: Select Stations
+* Tick individual stations; filter by words or by source.
+* **Select all shown**, **Unselect shown**, **Clear selection**.
+* Shows where each row matched and which fields the source did not state.
+* **Save search results to JSON**.
 
-### Tab 3: Visualize
-Publication-grade interactive plots rendered with Plotly:
-1. **Stage & Discharge Hydrograph**: Synchronized dual-axis plot showing river stage (meters) on the primary axis and discharge (m³/s) on the secondary axis, with Warning Level and Danger Level threshold lines.
-2. **Stage-Discharge Rating Curve (H-Q)**: Fitted power-law curve ($Q = a(h - h_0)^b$) over synchronized stage-discharge observation pairs.
-3. **Rainfall Hyetograph & Mass Curve**: Inverted bar chart showing precipitation hyetograph paired with cumulative mass curve.
-4. **Flow Duration Curve (FDC)**: Logarithmic discharge exceedance probability curve with marked $Q_{10}$ (high flow), $Q_{50}$ (median flow), and $Q_{90}$ (low flow) percentiles.
-5. **Groundwater Level Hydrograph**: Hydrograph of groundwater depth and water table fluctuations with mean water table reference line, optional inverted Y-axis toggle (mbgl depth convention), and KPI metrics (**Min Level**, **Mean Level**, **Max Level**, **Fluctuation Range**).
+### View 3: Visualize
+Pick a station and an analysis:
+* **Time series**: stage and discharge with CWC warning/danger lines; as reported, daily, monthly or annual; range slider.
+* **Summary & data quality**: statistics, completeness, longest gap, gauge-zero count.
+* **Compare stations**: one variable across stations.
+* **Monthly pattern**: spread by month (totals for rainfall) and departure from that month's average.
+* **Warning & danger exceedance**: events with start, end, hours and peak, timed from reading timestamps.
+* **Flow duration curve**: from daily mean discharge.
+* **Rating curve**: observed discharge only; estimated discharge is never fitted.
+* **Rainfall** and **Groundwater**.
+
+Readings equal to the station's gauge zero, and spikes above a limit you set, can be excluded; the page says how many.
+
+---
+
+## Advanced Mode
+
+Turn on **Advanced** (top right) for a terminal panel docked at the bottom of the window. **Source log** shows what each source returned, skipped or assumed; **Console** takes commands that update the page above:
+
+```text
+search --basin Cauvery --source CWC --period 2024:2024
+select 0,1
+get
+plot muthankera --kind exceedance
+stats --freq monthly --out monthly.csv
+```
+
+Type `help` for the full list. Searches and downloads made with the mouse are logged as commands. It is not a system shell. It runs only when the dashboard listens on localhost (the default for `hyswift-gui`).
 
 ---
 

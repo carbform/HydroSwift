@@ -16,6 +16,8 @@ from .api import (  # noqa: E402
     fetch,
     load,
     merge,
+    summary,
+    resample,
     plot,
     map,
     map_data,
