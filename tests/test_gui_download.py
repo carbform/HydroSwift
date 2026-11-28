@@ -41,6 +41,12 @@ def test_retry_keeps_earlier_data():
     assert out["path"].to_dict() == {"1": "one", "2": "part", "3": "three"}
 
 
+def test_retry_keeps_earlier_data_when_missing_paths_are_nan():
+    first = _run(("a", "2", "saved", "part", False))
+    again = _run(("a", "2", "error", float("nan"), None))
+    assert model.combine_runs(first, again)["path"].tolist() == ["part"]
+
+
 def test_job_reports_progress_and_result():
     def fetch(table, progress, cancel, **kw):
         progress({"event": "page", "source": "WRIS", "id": "1", "title": "S", "read": 2000, "total": None})

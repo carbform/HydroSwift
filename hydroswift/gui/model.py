@@ -149,7 +149,8 @@ def combine_runs(previous: Optional[pd.DataFrame], new: pd.DataFrame) -> pd.Data
     old = {(r["source"], r["id"]): r for r in previous.to_dict("records")}
     for item in new.to_dict("records"):
         key = (item["source"], item["id"])
-        if not (item.get("path") is None and old.get(key, {}).get("path")):
+        # pandas turns a missing path into None or NaN depending on version
+        if pd.notna(item.get("path")) or pd.isna(old.get(key, {}).get("path")):
             old[key] = item
     return pd.DataFrame(list(old.values()), columns=new.columns)
 
